@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSyncExternalStore } from "react";
 import { AlertCircle, ArrowRight, CalendarDays, CheckCircle2, Clock } from "lucide-react";
 import { Card, CardHeader } from "@/components/Card";
 import { DashboardShell } from "@/components/PageShell";
@@ -8,21 +9,24 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { T, useLanguage } from "@/components/language/LanguageProvider";
 import { DevelopmentJourneyRepository, DevelopmentUserContext } from "@/lib/visual-prototype-data";
-import { getAtlasPrimaryTask } from "@/lib/atlas-task-selector";
-import { isApplicationWorkspacePurchased, readApplicationRecords, readApplicationSelection } from "@/lib/application-store";
+import { getApplicationJourneyNodes, getAtlasPrimaryTask, getJourneyStagesForApplicationRecords } from "@/lib/atlas-task-selector";
+import { getApplicationStateSnapshot, getServerApplicationStateSnapshot, subscribeToApplicationState } from "@/lib/application-store";
+import { ApplicationRecord } from "@/lib/application-prototype-data";
 
 export default function DashboardPage() {
   const { text, t } = useLanguage();
   const context = DevelopmentUserContext.getDashboardContext();
-  const stages = DevelopmentJourneyRepository.getStages();
-  const nodes = DevelopmentJourneyRepository.getNodes();
+  const snapshot = useSyncExternalStore(subscribeToApplicationState, getApplicationStateSnapshot, getServerApplicationStateSnapshot);
+  const applicationState = snapshot === "server" ? { records: [] as ApplicationRecord[], selection: [] as string[], workspacePurchased: false } : JSON.parse(snapshot) as { records: ApplicationRecord[]; selection: string[]; workspacePurchased: boolean };
+  const applicationRecords = applicationState.records;
+  const selectedSchoolIds = applicationState.selection;
+  const stages = getJourneyStagesForApplicationRecords(applicationRecords);
+  const nodes = getApplicationJourneyNodes(applicationRecords, selectedSchoolIds);
   const preparedItems = DevelopmentJourneyRepository.getPreparedItems();
   const activity = DevelopmentJourneyRepository.getRecentActivity();
   const currentStage = stages.find((stage) => stage.state === "current") ?? stages[0];
   const currentIssue = nodes.find((node) => node.status === "blocked");
-  const applicationRecords = readApplicationRecords();
-  const selectedSchoolIds = readApplicationSelection();
-  const primaryTask = getAtlasPrimaryTask({ applicationRecords, selectedSchoolIds, workspacePurchased: isApplicationWorkspacePurchased(), journeyNodes: nodes });
+  const primaryTask = getAtlasPrimaryTask({ applicationRecords, selectedSchoolIds, workspacePurchased: applicationState.workspacePurchased, journeyNodes: nodes });
   const preparedForTask = primaryTask.atlasPreparedItems ?? preparedItems.slice(0, 4).map((item) => text(item.title));
 
   return (
@@ -38,16 +42,16 @@ export default function DashboardPage() {
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-7 text-[#6f6256]">
               <T
-                en="You are in the visa stage for your France application. Atlas is keeping the page focused on what matters now."
-                zh="你现在处在法国留学申请的签证阶段。Atlas 会把页面聚焦在此刻真正需要处理的事情上。"
+                en="You are in the application stage. Atlas is keeping school selection, materials, submission and results in one synchronized flow."
+                zh="你现在处在申请阶段。Atlas 会同步学校选择、材料准备、申请提交和结果跟进。"
               />
             </p>
           </div>
 
           <div className="grid gap-3 rounded-[22px] bg-[#f7f0e8] p-4 text-sm text-[#5d5148] sm:grid-cols-2 xl:w-[420px]">
-            <Fact label={{ en: "Application", zh: "申请" }} value={text(context.currentJourney)} />
-            <Fact label={{ en: "Current stage", zh: "当前阶段" }} value={text(context.currentStage)} />
-            <Fact label={{ en: "Destination", zh: "目的地" }} value={text(context.destination)} />
+            <Fact label={{ en: "Application", zh: "申请" }} value={applicationRecords[0] ? `${applicationRecords[0].universityName} · ${applicationRecords[0].programName}` : "学校申请规划"} />
+            <Fact label={{ en: "Current stage", zh: "当前阶段" }} value={text(currentStage.name)} />
+            <Fact label={{ en: "Destination", zh: "目的地" }} value={applicationRecords[0]?.country ?? (applicationState.selection.length ? "英国 / 法国" : text(context.destination))} />
             <Fact label={{ en: "Intake", zh: "入学时间" }} value={text(context.intakeDate)} />
             <Fact label={{ en: "School", zh: "学校" }} value={text(context.school)} />
             <Fact label={{ en: "Programme", zh: "项目" }} value={text(context.programme)} />

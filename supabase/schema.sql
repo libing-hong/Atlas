@@ -137,11 +137,13 @@ create table public.university_rankings (
   university_id text not null references public.universities(id) on delete cascade,
   ranking_provider text not null,
   ranking_year int not null,
+  ranking_type text not null default 'overall' check (ranking_type in ('overall', 'subject', 'unavailable')),
+  ranking_subject text,
   ranking_display text not null,
   university_canonical_name text not null,
   source_url text not null,
   source_checked_at timestamptz not null,
-  verification_status text not null check (verification_status in ('verified', 'needs_review', 'unranked_verified')),
+  verification_status text not null check (verification_status in ('verified', 'needs_review', 'unavailable_verified')),
   updated_at timestamptz not null default now(),
   unique (university_id, ranking_provider, ranking_year)
 );

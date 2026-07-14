@@ -3,7 +3,7 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, Check, CheckCircle2, CircleAlert, Copy, FileUp, LoaderCircle, Upload, X } from "lucide-react";
 import { Card } from "@/components/Card";
-import { ApplicationMode, getMaterialsForApplication, readApplicationMode, readApplicationRecords } from "@/lib/application-store";
+import { ApplicationMode, getMaterialsForApplication, readApplicationMode, readApplicationRecords, updateApplicationRecord } from "@/lib/application-store";
 import { AdmissionRequirement, ApplicationMaterial, ApplicationRecord, getAdmissionRequirements, RequirementStatus, SchoolRecommendation } from "@/lib/application-prototype-data";
 import { getAdmissionKnowledge } from "@/lib/admission-knowledge";
 import { InstitutionEligibilityPanel, InstitutionVerification } from "./InstitutionEligibilityPanel";
@@ -19,8 +19,8 @@ type VerificationState = "idle" | "loading" | "success" | "error";
 export function MaterialsWorkspaceClient({ school, applicationId }: { school: SchoolRecommendation; applicationId: string }) {
   const record = useMemo<ApplicationRecord>(() => readApplicationRecords().find((item) => item.id === applicationId) ?? {
     id: applicationId, schoolRecommendationId: school.id, universityName: school.universityName, programName: school.programName,
-    country: school.country, intake: school.intake, status: "materials_in_progress", preparedMaterials: school.materialsReady,
-    totalMaterials: school.materialsTotal, missingMaterials: [], nextAction: "准备申请材料", serviceType: "none",
+    country: school.country, intake: school.intake, status: "materials_in_progress", detectedMaterialCount: school.materialsReady, preparedMaterials: school.materialsReady,
+    totalMaterials: school.materialsTotal, missingMaterials: [], applicationProgress: Math.round((school.materialsReady / school.materialsTotal) * 45), nextAction: "准备申请材料", serviceType: "none",
   }, [applicationId, school]);
   const requirements = useMemo(() => getAdmissionRequirements(school), [school]);
   const knowledge = getAdmissionKnowledge(school.id);
@@ -57,6 +57,20 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
     window.dispatchEvent(new CustomEvent("atlas:requirements-updated", { detail: { applicationId, pending: requirements.filter((item) => item.status === "needs_confirmation" && !ids.includes(item.id)).map((item) => item.label) } }));
   }
 
+  function syncMaterialStatus(nextStatuses: Record<string, string>) {
+    const detectedMaterialCount = Object.values(nextStatuses).filter((status) => status === "prepared" || status === "confirmed").length;
+    const missingMaterials = baseMaterials.filter((material) => !["prepared", "confirmed"].includes(nextStatuses[material.id] ?? material.status)).map((material) => material.name);
+    const readyToApply = missingMaterials.length === 0;
+    updateApplicationRecord(applicationId, {
+      detectedMaterialCount,
+      preparedMaterials: detectedMaterialCount,
+      missingMaterials,
+      applicationProgress: readyToApply ? 78 : Math.max(20, Math.round((detectedMaterialCount / Math.max(baseMaterials.length, 1)) * 70)),
+      status: readyToApply ? "ready_to_apply" : "materials_in_progress",
+      nextAction: readyToApply ? "核对申请信息并提交申请" : `补充 ${missingMaterials[0] ?? "申请材料"}`,
+    });
+  }
+
   function openRequirement(requirement: AdmissionRequirement) {
     if (requirement.id === gradeRequirement?.id) {
       institutionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -82,7 +96,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
     }, 450);
     event.target.value = "";
   }
-  function confirmFile(material: ApplicationMaterial) { setStatuses((current) => ({ ...current, [material.id]: "confirmed" })); setNotice("Atlas 已记录你的确认，材料状态已更新。"); }
+  function confirmFile(material: ApplicationMaterial) { setStatuses((current) => { const next = { ...current, [material.id]: "confirmed" }; syncMaterialStatus(next); return next; }); setNotice("Atlas 已记录你的确认，材料状态、申请进度和当前事项已同步更新。"); }
 
   function currentRequirement(requirement: AdmissionRequirement) {
     if (requirement.id === gradeRequirement?.id && institution.complete) return {

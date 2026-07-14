@@ -1,12 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useSyncExternalStore } from "react";
 import { ArrowRight, CheckCircle2, Clock3, FileCheck2, LockKeyhole, PlayCircle } from "lucide-react";
 import { Card } from "@/components/Card";
 import { DashboardShell } from "@/components/PageShell";
 import { ProgressBar } from "@/components/ProgressBar";
 import { T, useLanguage } from "@/components/language/LanguageProvider";
-import { JourneyNode, JourneyNodeStatus, DevelopmentJourneyRepository } from "@/lib/visual-prototype-data";
+import { JourneyNode, JourneyNodeStatus } from "@/lib/visual-prototype-data";
+import { getApplicationJourneyNodes, getJourneyStagesForApplicationRecords } from "@/lib/atlas-task-selector";
+import { getApplicationStateSnapshot, getServerApplicationStateSnapshot, subscribeToApplicationState } from "@/lib/application-store";
+import { ApplicationRecord } from "@/lib/application-prototype-data";
 import { cn } from "@/lib/utils";
 
 const statusOrder: Record<JourneyNodeStatus, number> = {
@@ -67,62 +71,35 @@ function UserStatus({ status }: { status: JourneyNodeStatus }) {
 function MainTask({ node }: { node: JourneyNode }) {
   const { text } = useLanguage();
   const Icon = iconByStatus[node.status];
-  const isBlocked = node.status === "blocked";
-
   return (
     <Card className="border-2 border-[#2f2924] bg-[#fffaf3] p-6 md:p-8">
       <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
         <div className="max-w-2xl">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#f1e2dc] px-3 py-1.5 text-xs font-medium text-[#8a5f54]">
+            <span className="inline-flex items-center gap-2 rounded-full bg-[#e7ece7] px-3 py-1.5 text-xs font-medium text-[#4f6d54]">
               <Icon size={15} />
-              <T en="Needs information first" zh="需要先补充信息" />
+              <UserStatus status={node.status} />
             </span>
             <span className="text-sm text-[#9a8b7c]">
               <T en="Deadline" zh="截止日期" /> {node.deadline}
             </span>
           </div>
           <h2 className="mt-5 text-3xl font-semibold text-[#2f2924] md:text-4xl">
-            {node.id === "confirm-accommodation-proof" ? (
-              <T en="Add accommodation information" zh="补充住宿信息" />
-            ) : (
-              text(node.title)
-            )}
+            {text(node.title)}
           </h2>
-          <p className="mt-3 max-w-xl text-base leading-7 text-[#5d5148]">
-            <T
-              en="Add your final accommodation address and move-in date. Atlas will then update your visa checklist and accommodation proof requirements."
-              zh="补充最终住宿地址和入住日期后，Atlas 会更新你的签证材料清单和住宿证明要求。"
-            />
-          </p>
+          {node.schoolName ? <p className="mt-3 text-sm font-medium text-[#4a3d34]">{node.schoolName} · {node.programName}</p> : null}
+          <p className="mt-2 max-w-xl text-base leading-7 text-[#5d5148]">{text(node.explanation)}</p>
         </div>
         <Link
-          href={`/dashboard/journey/${node.id}`}
+          href={node.actionHref ?? `/dashboard/journey/${node.id}`}
           className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#2f2924] px-5 py-3 text-sm font-medium text-[#fffaf3]"
         >
-          <T en="Add accommodation information" zh="补充住宿信息" />
+          {text(node.primaryCta)}
           <ArrowRight size={16} />
         </Link>
       </div>
 
-      {isBlocked ? (
-        <details className="mt-6 border-t border-[#e8dfd3] pt-5" id="alternative-options">
-          <summary className="cursor-pointer list-none text-sm font-medium text-[#6f6256]">
-            <T en="No confirmed accommodation? View acceptable alternatives" zh="暂时没有确定住宿？查看可接受的替代方案" />
-          </summary>
-          <div className="mt-4 grid gap-3 text-sm text-[#5d5148] sm:grid-cols-3">
-            {[
-              ["Rental contract", "租房合同"],
-              ["Hotel booking confirmation", "酒店预订单"],
-              ["School housing certificate", "学校住宿证明"],
-            ].map(([en, zh]) => (
-              <div key={en} className="rounded-2xl bg-[#f7f0e8] px-4 py-3">
-                <T en={en} zh={zh} />
-              </div>
-            ))}
-          </div>
-        </details>
-      ) : null}
+      {node.missingInformation?.length ? <div className="mt-6 border-t border-[#e8dfd3] pt-5"><p className="text-sm font-medium text-[#6f6256]">当前缺少</p><div className="mt-3 flex flex-wrap gap-2">{node.missingInformation.map((item) => <span key={item} className="rounded-full bg-[#f7f0e8] px-3 py-2 text-xs text-[#5d5148]">{item}</span>)}</div></div> : null}
     </Card>
   );
 }
@@ -131,7 +108,7 @@ function CompactTask({ node }: { node: JourneyNode }) {
   const { text } = useLanguage();
   return (
     <Link
-      href={`/dashboard/journey/${node.id}`}
+      href={node.actionHref ?? `/dashboard/journey/${node.id}`}
       className="group flex flex-col gap-4 border-b border-[#e8dfd3] py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="min-w-0">
@@ -160,8 +137,10 @@ function CompactTask({ node }: { node: JourneyNode }) {
 
 export default function JourneyPage() {
   const { text } = useLanguage();
-  const stages = DevelopmentJourneyRepository.getStages();
-  const nodes = DevelopmentJourneyRepository.getNodes();
+  const snapshot = useSyncExternalStore(subscribeToApplicationState, getApplicationStateSnapshot, getServerApplicationStateSnapshot);
+  const state = snapshot === "server" ? { records: [] as ApplicationRecord[], selection: [] as string[] } : JSON.parse(snapshot) as { records: ApplicationRecord[]; selection: string[] };
+  const stages = getJourneyStagesForApplicationRecords(state.records);
+  const nodes = getApplicationJourneyNodes(state.records, state.selection);
   const orderedNodes = sortByPriority(nodes);
   const mainTask = orderedNodes[0];
   const nextTasks = orderedNodes
@@ -182,7 +161,7 @@ export default function JourneyPage() {
         <div className="mt-2 flex flex-col justify-between gap-3 md:flex-row md:items-end">
           <div>
             <h1 className="font-editorial text-5xl font-semibold leading-none text-[#2f2924] md:text-6xl">
-              <T en="France visa tasks" zh="法国签证事项" />
+              <T en="Application tasks" zh="申请事项" />
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-[#6f6256]">
               <T en="Start with one task. Atlas will keep the next step ready for you." zh="先完成一件事。Atlas 会为你准备好下一步。" />
@@ -247,13 +226,13 @@ export default function JourneyPage() {
 
         <Card className="bg-[#f7f0e8] p-5 md:p-6">
           <p className="text-xs uppercase tracking-[0.18em] text-[#9a8b7c]"><T en="After this step" zh="完成这一步后" /></p>
-          <h2 className="mt-2 text-xl font-semibold text-[#2f2924]"><T en="Atlas will continue" zh="Atlas 将继续" /></h2>
+          <h2 className="mt-2 text-xl font-semibold text-[#2f2924]"><T en="Atlas will keep applications in sync" zh="Atlas 将同步更新申请" /></h2>
           <ul className="mt-4 grid gap-3 text-sm leading-6 text-[#5d5148] md:grid-cols-2">
             {[
-              ["Update your personalized visa checklist", "更新个性化签证材料清单"],
-              ["Identify the accommodation proof that applies", "判断适用的住宿证明类型"],
-              ["Prepare the relevant French field translations", "准备相关法语字段翻译"],
-              ["Open the student visa preparation workspace", "解锁准备学生签证材料工作区"],
+              ["Update the school's material count", "更新学校材料检测数量"],
+              ["Recalculate application progress", "重新计算申请进度"],
+              ["Refresh the next action and deadline", "更新下一步动作与截止日期"],
+              ["Keep My Applications and Current Tasks aligned", "同步我的申请与当前事项"],
             ].map(([en, zh]) => (
               <li key={en} className="flex items-start gap-3"><CheckCircle2 size={17} className="mt-1 shrink-0 text-[#6f856a]" /><T en={en} zh={zh} /></li>
             ))}

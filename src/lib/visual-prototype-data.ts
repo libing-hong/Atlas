@@ -35,6 +35,11 @@ export type JourneyNode = {
   missingInformation?: string[];
   primaryCta: string;
   completionRequirement: string;
+  actionHref?: string;
+  applicationId?: string;
+  schoolName?: string;
+  programName?: string;
+  applicationProgress?: number;
   officialResources?: OfficialResource[];
 };
 
@@ -91,20 +96,21 @@ export type MaterialCategory = {
 
 const dashboardContext: DashboardContext = {
   studentName: "Lin Muqing",
-  currentJourney: "France student visa application",
-  destination: "Paris, France",
-  school: "ESSEC Business School",
-  programme: "Master in Management",
-  intakeDate: "September 2026",
-  currentStage: "Visa",
+  currentJourney: "University application planning",
+  destination: "United Kingdom / France",
+  school: "Application list pending confirmation",
+  programme: "Marketing / International Business",
+  intakeDate: "September 2027",
+  currentStage: "Application",
   daysUntilVisaAppointment: 18,
   daysUntilIntake: 62,
 };
 
 const stages: JourneyStage[] = [
-  { id: "offer", name: "Offer", state: "completed", progress: 100 },
-  { id: "visa", name: "Visa", state: "current", progress: 46 },
-  { id: "pre-arrival", name: "Pre-arrival", state: "upcoming", progress: 12 },
+  { id: "application", name: "Application", state: "current", progress: 22 },
+  { id: "offer", name: "Offer", state: "upcoming", progress: 0 },
+  { id: "visa", name: "Visa", state: "upcoming", progress: 0 },
+  { id: "pre-arrival", name: "Pre-arrival", state: "upcoming", progress: 0 },
   { id: "arrival", name: "Arrival", state: "upcoming", progress: 0 },
   { id: "settling-in", name: "Settling In", state: "upcoming", progress: 0 },
   { id: "student-life", name: "Student Life", state: "upcoming", progress: 0 },

@@ -1,5 +1,5 @@
 import { ApplicationRecord } from "./application-prototype-data";
-import { JourneyNode } from "./visual-prototype-data";
+import { JourneyNode, JourneyStage } from "./visual-prototype-data";
 
 export type AtlasPrimaryTask = {
   id: string;
@@ -12,10 +12,13 @@ export type AtlasPrimaryTask = {
   actionHref: string;
   applicationId?: string;
   schoolName?: string;
+  programName?: string;
   deadline?: string;
   atlasPreparedItems?: string[];
   userRequiredItems?: string[];
 };
+
+const stageNames = ["Application", "Offer", "Visa", "Pre-arrival", "Arrival", "Settling In", "Student Life", "Graduation"] as const;
 
 function deadlineValue(value?: string) {
   if (!value || value === "滚动录取") return Number.MAX_SAFE_INTEGER;
@@ -23,27 +26,128 @@ function deadlineValue(value?: string) {
   return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
 }
 
-export function getAtlasPrimaryTask({
-  applicationRecords,
-  selectedSchoolIds,
-  workspacePurchased,
-  journeyNodes,
-}: {
+function daysUntil(value?: string) {
+  const parsed = deadlineValue(value);
+  return parsed === Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : Math.ceil((parsed - Date.now()) / 86_400_000);
+}
+
+function recordPriority(record: ApplicationRecord) {
+  if (record.status === "supplement_required") return 3;
+  if (record.status !== "offer_received" && record.status !== "submitted" && record.status !== "waiting_result" && daysUntil(record.nextDeadline) <= 30) return 1;
+  if (record.status === "ready_to_apply") return 2;
+  if (record.missingMaterials.length) return 4;
+  if (record.status === "submitted" || record.status === "waiting_result") return 5;
+  if (record.status === "offer_received") return 6;
+  return 7;
+}
+
+function taskCopy(record: ApplicationRecord) {
+  if (record.status === "supplement_required") return {
+    title: `补充 ${record.universityName} 要求的材料`,
+    action: "进入补件工作区",
+    explanation: `学校要求补充材料。请先处理：${record.missingMaterials.join("、") || "学校最新要求"}。`,
+  };
+  if (record.status === "ready_to_apply") return {
+    title: `确认并提交 ${record.universityName} 申请`,
+    action: "进入申请工作区",
+    explanation: "核心材料已经准备完成，请核对申请信息并决定提交方式。",
+  };
+  if (record.status === "submitted" || record.status === "waiting_result") return {
+    title: `跟进 ${record.universityName} 申请结果`,
+    action: "查看申请状态",
+    explanation: "申请已经提交，当前仍处于申请阶段；收到并核验正式 Offer 后才会进入录取阶段。",
+  };
+  if (record.status === "offer_received") return {
+    title: `核验 ${record.universityName} 正式 Offer`,
+    action: "查看录取信息",
+    explanation: "Atlas 已检测到正式录取结果，请核验 Offer 内容、截止日期和后续条件。",
+  };
+  return {
+    title: `准备 ${record.universityName} 的申请材料`,
+    action: "进入材料工作区",
+    explanation: `${record.totalMaterials} 项材料中已检测到 ${record.detectedMaterialCount ?? record.preparedMaterials} 项，仍缺少 ${record.missingMaterials.length} 项。`,
+  };
+}
+
+export function getJourneyStagesForApplicationRecords(records: ApplicationRecord[]): JourneyStage[] {
+  const currentIndex = records.some((record) => record.status === "offer_received") ? 1 : 0;
+  return stageNames.map((name, index) => ({
+    id: name.toLowerCase().replaceAll(" ", "-"),
+    name,
+    state: index < currentIndex ? "completed" : index === currentIndex ? "current" : "upcoming",
+    progress: index === currentIndex
+      ? currentIndex === 0
+        ? Math.max(12, records.length ? Math.round(records.reduce((total, record) => total + record.applicationProgress, 0) / records.length) : 12)
+        : 18
+      : index < currentIndex ? 100 : 0,
+  }));
+}
+
+export function getApplicationJourneyNodes(applicationRecords: ApplicationRecord[], selectedSchoolIds: string[]): JourneyNode[] {
+  if (!applicationRecords.length) {
+    return [{
+      id: selectedSchoolIds.length ? "choose-application-service" : "confirm-application-schools",
+      title: selectedSchoolIds.length ? "选择申请方式" : "确认申请学校",
+      stage: "Application",
+      explanation: selectedSchoolIds.length ? `你已选择 ${selectedSchoolIds.length} 所学校，请确认 DIY、顾问协助或 Atlas 代办模式。` : "先确认准备申请的学校，Atlas 才能生成对应材料和截止日期任务。",
+      status: "ready",
+      deadline: "待确认",
+      priority: "High",
+      whyItMatters: "学校名单和申请方式决定后续材料、截止日期与工作区。",
+      atlasCanHelpWith: ["学校推荐结果", "公开要求对照", "申请材料路径"],
+      primaryCta: selectedSchoolIds.length ? "选择申请方式" : "查看推荐学校",
+      completionRequirement: "申请学校和服务模式已确认。",
+      actionHref: selectedSchoolIds.length ? "/applications" : "/applications/recommendations",
+    }];
+  }
+
+  return [...applicationRecords]
+    .sort((left, right) => recordPriority(left) - recordPriority(right) || deadlineValue(left.nextDeadline) - deadlineValue(right.nextDeadline))
+    .map((record) => {
+      const copy = taskCopy(record);
+      return {
+        id: record.id,
+        title: copy.title,
+        stage: record.status === "offer_received" ? "Offer" : "Application",
+        explanation: copy.explanation,
+        status: record.status === "submitted" || record.status === "waiting_result" ? "in_progress" : record.status === "offer_received" ? "awaiting_evidence" : record.status === "supplement_required" ? "blocked" : "ready",
+        deadline: record.nextDeadline ?? "待确认",
+        priority: recordPriority(record) <= 2 ? "High" : recordPriority(record) <= 4 ? "Medium" : "Low",
+        whyItMatters: "该任务会直接更新学校申请进度、材料状态和下一步行动。",
+        atlasCanHelpWith: ["学校公开要求", "材料清单", "申请状态与截止日期"],
+        missingInformation: record.missingMaterials,
+        primaryCta: copy.action,
+        completionRequirement: record.nextAction,
+        actionHref: `/applications/${record.id}/materials`,
+        applicationId: record.id,
+        schoolName: record.universityName,
+        programName: record.programName,
+        applicationProgress: record.applicationProgress,
+      } satisfies JourneyNode;
+    });
+}
+
+export function getAtlasPrimaryTask({ applicationRecords, selectedSchoolIds }: {
   applicationRecords: ApplicationRecord[];
   selectedSchoolIds: string[];
   workspacePurchased: boolean;
   journeyNodes: JourneyNode[];
 }): AtlasPrimaryTask {
-  const urgentNode = journeyNodes.find((node) => node.status === "blocked" && node.priority === "High");
-  if (urgentNode) return { id: urgentNode.id, source: urgentNode.id.includes("accommodation") ? "housing" : "visa", priority: 1, title: urgentNode.title, description: urgentNode.blocker ?? urgentNode.explanation, status: "urgent", actionLabel: urgentNode.primaryCta, actionHref: `/dashboard/journey/${urgentNode.id}`, deadline: urgentNode.deadline, atlasPreparedItems: urgentNode.atlasCanHelpWith, userRequiredItems: urgentNode.missingInformation };
-
-  if (applicationRecords.length) {
-    const record = [...applicationRecords].sort((a, b) => deadlineValue(a.nextDeadline) - deadlineValue(b.nextDeadline))[0];
-    const href = `/applications/${record.id}/materials`;
-    return { id: record.id, source: "application", priority: 5, title: `准备 ${record.universityName} 的申请材料`, description: `${record.universityName} 需要的 ${record.totalMaterials} 项材料中，目前已检测到 ${record.preparedMaterials} 项。`, status: "ready", actionLabel: "开始准备材料", actionHref: href, applicationId: record.id, schoolName: record.universityName, deadline: record.nextDeadline, atlasPreparedItems: ["学校录取要求", "材料清单", "可复用材料关联", "申请时间节点"], userRequiredItems: record.missingMaterials };
-  }
-
-  if (selectedSchoolIds.length && !workspacePurchased) return { id: "choose-application-service", source: "application", priority: 6, title: "选择如何完成第一所学校的申请", description: `你已选择 ${selectedSchoolIds.length} 所学校。你可以自己准备，也可以按学校购买 Atlas 的递交服务。`, status: "waiting_user", actionLabel: "选择申请方式", actionHref: "/applications", atlasPreparedItems: ["完整学校推荐", "录取要求对照", "材料准备路径"], userRequiredItems: ["选择自己准备、单校递交或顾问咨询"] };
-
-  return { id: "confirm-application-schools", source: "application", priority: 7, title: "确认准备申请的学校", description: "Atlas 已整理完整推荐学校和录取要求，确认后即可进入正式申请准备。", status: "ready", actionLabel: "查看推荐学校", actionHref: "/applications/recommendations", atlasPreparedItems: ["完整推荐学校名单", "冲刺、重点和相对稳妥分类", "学校录取要求和风险分析"] };
+  const node = getApplicationJourneyNodes(applicationRecords, selectedSchoolIds)[0];
+  return {
+    id: node.id,
+    source: "application",
+    priority: node.priority === "High" ? 1 : node.priority === "Medium" ? 4 : 7,
+    title: node.title,
+    description: node.explanation,
+    status: node.status === "blocked" ? "urgent" : node.status === "in_progress" || node.status === "awaiting_evidence" ? "atlas_processing" : "ready",
+    actionLabel: node.primaryCta,
+    actionHref: node.actionHref ?? "/applications",
+    applicationId: node.applicationId,
+    schoolName: node.schoolName,
+    programName: node.programName,
+    deadline: node.deadline,
+    atlasPreparedItems: node.atlasCanHelpWith,
+    userRequiredItems: node.missingInformation,
+  };
 }

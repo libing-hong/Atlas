@@ -6,8 +6,37 @@ const recordsKey = "atlas.application.records.v1";
 const workspaceKey = "atlas.application.workspace.v1";
 const serviceKey = "atlas.application.purchased-service.v1";
 const applicationModeKey = "atlas.application.mode.v1";
+const applicationStateEvent = "atlas-application-state-change";
 
 export type ApplicationMode = "unselected" | "DIY" | "managed" | "advisor_assisted";
+
+function emitApplicationStateChange() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(applicationStateEvent));
+}
+
+export function subscribeToApplicationState(onChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(applicationStateEvent, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(applicationStateEvent, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+export function getApplicationStateSnapshot() {
+  if (typeof window === "undefined") return "server";
+  return JSON.stringify({
+    selection: readApplicationSelection(),
+    records: readApplicationRecords(),
+    mode: readApplicationMode(),
+    workspacePurchased: isApplicationWorkspacePurchased(),
+  });
+}
+
+export function getServerApplicationStateSnapshot() {
+  return "server";
+}
 
 export function readApplicationSelection(): string[] {
   if (typeof window === "undefined") return [];
@@ -15,7 +44,10 @@ export function readApplicationSelection(): string[] {
 }
 
 export function writeApplicationSelection(ids: string[]) {
-  if (typeof window !== "undefined") window.localStorage.setItem(selectionKey, JSON.stringify(ids));
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(selectionKey, JSON.stringify(ids));
+    emitApplicationStateChange();
+  }
 }
 
 export function isApplicationWorkspacePurchased(): boolean {
@@ -30,7 +62,10 @@ export function readPurchasedService(): PurchasedService {
 }
 
 export function purchaseService(service: Exclude<PurchasedService, "none">) {
-  if (typeof window !== "undefined") window.localStorage.setItem(serviceKey, service);
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(serviceKey, service);
+    emitApplicationStateChange();
+  }
 }
 
 export function readApplicationMode(): ApplicationMode {
@@ -40,7 +75,10 @@ export function readApplicationMode(): ApplicationMode {
 }
 
 export function writeApplicationMode(mode: Exclude<ApplicationMode, "unselected">) {
-  if (typeof window !== "undefined") window.localStorage.setItem(applicationModeKey, mode);
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(applicationModeKey, mode);
+    emitApplicationStateChange();
+  }
 }
 
 export function activateApplicationWorkspace(selectedIds: string[], schools: SchoolRecommendation[]) {
@@ -53,16 +91,37 @@ export function activateApplicationWorkspace(selectedIds: string[], schools: Sch
 
 export function readApplicationRecords(): ApplicationRecord[] {
   if (typeof window === "undefined") return [];
-  try { return JSON.parse(window.localStorage.getItem(recordsKey) ?? "[]") as ApplicationRecord[]; } catch { return []; }
+  try {
+    const records = JSON.parse(window.localStorage.getItem(recordsKey) ?? "[]") as ApplicationRecord[];
+    return records.map((record) => ({
+      ...record,
+      detectedMaterialCount: record.detectedMaterialCount ?? record.preparedMaterials,
+      applicationProgress: record.applicationProgress ?? Math.round((record.preparedMaterials / Math.max(record.totalMaterials, 1)) * 45),
+    }));
+  } catch { return []; }
 }
 
 function writeApplicationRecords(records: ApplicationRecord[]) {
-  if (typeof window !== "undefined") window.localStorage.setItem(recordsKey, JSON.stringify(records));
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(recordsKey, JSON.stringify(records));
+    emitApplicationStateChange();
+  }
+}
+
+export function updateApplicationRecord(applicationId: string, changes: Partial<ApplicationRecord>) {
+  const records = readApplicationRecords();
+  const next = records.map((record) => record.id === applicationId ? {
+    ...record,
+    ...changes,
+    detectedMaterialCount: changes.detectedMaterialCount ?? changes.preparedMaterials ?? record.detectedMaterialCount ?? record.preparedMaterials,
+  } : record);
+  writeApplicationRecords(next);
+  return next;
 }
 
 export function confirmApplications(selectedIds: string[], schools: SchoolRecommendation[]) {
   const records = readApplicationRecords();
-  const nextRecords = [...records];
+  const nextRecords = records.filter((record) => selectedIds.includes(record.schoolRecommendationId));
   for (const school of schools.filter((item) => selectedIds.includes(item.id))) {
     const record = createApplicationRecord(school);
     const index = nextRecords.findIndex((item) => item.schoolRecommendationId === school.id);

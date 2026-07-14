@@ -1,9 +1,12 @@
-export type RankingVerificationStatus = "verified" | "needs_review" | "unranked_verified";
+export type RankingVerificationStatus = "verified" | "needs_review" | "unavailable_verified";
+export type RankingType = "overall" | "subject" | "unavailable";
 
 export type UniversityRankingRecord = {
   universityId: string;
   rankingProvider: "QS";
   rankingYear: 2026;
+  rankingType: RankingType;
+  rankingSubject?: string;
   rankingDisplay: string;
   universityCanonicalName: string;
   sourceUrl: string;
@@ -14,10 +17,10 @@ export type UniversityRankingRecord = {
 export const qs2026SourceUrl = "https://www.topuniversities.com/world-university-rankings/2026";
 
 const rankings: UniversityRankingRecord[] = [
-  { universityId: "university-of-leeds", rankingProvider: "QS", rankingYear: 2026, rankingDisplay: "#86", universityCanonicalName: "University of Leeds", sourceUrl: qs2026SourceUrl, sourceCheckedAt: "2026-07-14", verificationStatus: "verified" },
-  { universityId: "university-of-birmingham", rankingProvider: "QS", rankingYear: 2026, rankingDisplay: "#76", universityCanonicalName: "University of Birmingham", sourceUrl: qs2026SourceUrl, sourceCheckedAt: "2026-07-14", verificationStatus: "verified" },
-  { universityId: "university-of-exeter", rankingProvider: "QS", rankingYear: 2026, rankingDisplay: "=155", universityCanonicalName: "University of Exeter", sourceUrl: qs2026SourceUrl, sourceCheckedAt: "2026-07-14", verificationStatus: "verified" },
-  { universityId: "essec-business-school", rankingProvider: "QS", rankingYear: 2026, rankingDisplay: "QS 2026 未上榜", universityCanonicalName: "ESSEC Business School", sourceUrl: qs2026SourceUrl, sourceCheckedAt: "2026-07-14", verificationStatus: "unranked_verified" },
+  { universityId: "university-of-leeds", rankingProvider: "QS", rankingYear: 2026, rankingType: "overall", rankingDisplay: "#86", universityCanonicalName: "University of Leeds", sourceUrl: qs2026SourceUrl, sourceCheckedAt: "2026-07-14", verificationStatus: "verified" },
+  { universityId: "university-of-birmingham", rankingProvider: "QS", rankingYear: 2026, rankingType: "overall", rankingDisplay: "#76", universityCanonicalName: "University of Birmingham", sourceUrl: qs2026SourceUrl, sourceCheckedAt: "2026-07-14", verificationStatus: "verified" },
+  { universityId: "university-of-exeter", rankingProvider: "QS", rankingYear: 2026, rankingType: "overall", rankingDisplay: "=155", universityCanonicalName: "University of Exeter", sourceUrl: qs2026SourceUrl, sourceCheckedAt: "2026-07-14", verificationStatus: "verified" },
+  { universityId: "essec-business-school", rankingProvider: "QS", rankingYear: 2026, rankingType: "unavailable", rankingDisplay: "暂无适用的QS排名数据", universityCanonicalName: "ESSEC Business School", sourceUrl: qs2026SourceUrl, sourceCheckedAt: "2026-07-15", verificationStatus: "unavailable_verified" },
 ];
 
 export const universityAliases: Record<string, string[]> = {

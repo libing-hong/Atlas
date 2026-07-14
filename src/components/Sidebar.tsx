@@ -25,7 +25,7 @@ import { LanguageToggle, useLanguage } from "./language/LanguageProvider";
 const studentLinks = [
   { href: "/dashboard", label: { en: "My Atlas", zh: "我的 Atlas" }, icon: LayoutDashboard, active: true },
   { href: "/dashboard/journey", label: { en: "Current Tasks", zh: "当前事项" }, icon: Sparkles, active: true },
-  { href: "/dashboard/applications", label: { en: "Applications", zh: "申请" }, icon: GraduationCap, active: true },
+  { href: "/dashboard/applications", label: { en: "My Applications", zh: "我的申请" }, icon: GraduationCap, active: true },
   { href: "/dashboard/materials", label: { en: "Materials", zh: "材料中心" }, icon: FolderOpen, active: true },
   { href: "/dashboard/form-assistant", label: { en: "Form Assistant", zh: "表格助手" }, icon: FileText, active: false },
   { href: "/dashboard/action-center", label: { en: "Action Center", zh: "行动中心" }, icon: Search, active: false },
@@ -59,7 +59,9 @@ export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
         <nav className="mt-6 space-y-1.5">
           {links.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const isActive = item.href === "/dashboard/applications"
+              ? pathname.startsWith("/dashboard/applications") || pathname.startsWith("/applications")
+              : pathname === item.href;
             return (
               <Link
                 key={item.href}
@@ -94,7 +96,9 @@ export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
         <nav className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-4 border-t border-[#e8dfd3] bg-[#fffaf3]/95 px-2 py-2 shadow-[0_-10px_30px_rgba(88,72,55,0.08)] backdrop-blur lg:hidden">
           {studentLinks.slice(0, 4).map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const isActive = item.href === "/dashboard/applications"
+              ? pathname.startsWith("/dashboard/applications") || pathname.startsWith("/applications")
+              : pathname === item.href;
             return (
               <Link
                 key={item.href}
@@ -105,7 +109,7 @@ export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
                 )}
               >
                 <Icon size={18} />
-                <span>{t(item.label).replace("My ", "").replace("我的 ", "")}</span>
+                <span className="whitespace-nowrap">{t(item.label)}</span>
               </Link>
             );
           })}

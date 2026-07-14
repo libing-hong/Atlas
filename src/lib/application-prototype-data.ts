@@ -14,7 +14,7 @@ export type ApplicationHomeState =
 
 export type RecommendationCategory = "reach" | "target" | "safer";
 
-export type ApplicationRecordStatus = "materials_in_progress" | "ready_to_apply" | "submitted" | "offer_received";
+export type ApplicationRecordStatus = "materials_in_progress" | "ready_to_apply" | "submitted" | "waiting_result" | "supplement_required" | "offer_received";
 
 export type MaterialPreparationStatus = "prepared" | "uploading" | "processing" | "needs_confirmation" | "review_required" | "not_detected" | "not_required" | "rejected";
 
@@ -48,9 +48,11 @@ export type ApplicationRecord = {
   country: string;
   intake: string;
   status: ApplicationRecordStatus;
+  detectedMaterialCount: number;
   preparedMaterials: number;
   totalMaterials: number;
   missingMaterials: string[];
+  applicationProgress: number;
   nextAction: string;
   nextDeadline?: string;
   serviceType: "none" | "single_school" | "full_service";
@@ -85,6 +87,17 @@ export type SchoolRecommendation = {
   representativeModules?: string[];
   fullCurriculumUrl?: string;
   officialProgramUrl?: string;
+  programDetails?: {
+    introduction?: string;
+    directions?: string[];
+    coreCourses?: string[];
+    electiveCourses?: string[];
+    learningOutcomes?: string[];
+    teachingLocation?: string;
+    teachingFormat?: string;
+    practicalProjects?: string[];
+    careerDirections?: string[];
+  };
   recommendationContent: {
     summary: string;
     personalFit: string;
@@ -132,9 +145,11 @@ export function createApplicationRecord(school: SchoolRecommendation): Applicati
     country: school.country,
     intake: school.intake,
     status: "materials_in_progress",
+    detectedMaterialCount: school.materialsReady,
     preparedMaterials: school.materialsReady,
     totalMaterials: school.materialsTotal,
     missingMaterials,
+    applicationProgress: Math.round((school.materialsReady / school.materialsTotal) * 45),
     nextAction: `开始准备 ${school.universityName} 的申请材料`,
     nextDeadline: school.deadline,
     serviceType: "none",
@@ -242,6 +257,17 @@ export const recommendations: SchoolRecommendation[] = [
     isSelected: true,
     isConfirmed: false,
     officialProgramUrl: "https://courses.leeds.ac.uk/7652/international-marketing-management-msc",
+    programDetails: {
+      introduction: "该项目围绕国际营销决策、市场分析与跨文化商业环境展开，课程信息以学校最新专业页面为准。",
+      directions: ["国际营销分析", "跨文化市场策略", "营销决策与问题解决"],
+      coreCourses: ["课程名称以学校最新课程目录为准"],
+      electiveCourses: ["该项公开信息暂未确认"],
+      learningOutcomes: ["分析国际市场问题", "运用数据支持营销决策", "在跨文化环境中表达商业方案"],
+      teachingLocation: "Leeds, United Kingdom",
+      teachingFormat: "全日制授课型硕士",
+      practicalProjects: ["学校公开页面提及 Global Industry Programme，具体安排以当年课程为准"],
+      careerDirections: ["国际市场营销", "品牌与市场分析", "跨境业务与商业发展"],
+    },
     recommendationContent: {
       summary: "你已确认的市场营销本科背景与该项目接受多学科申请者的公开要求相衔接；现有工作经历可用于说明职业动机。Leeds 的课程强调国际营销分析与实践项目，但语言单项和最终材料仍需继续核对。",
       personalFit: "你已确认的本科专业方向与市场营销相关，现有工作经历也可用于个人陈述中解释国际营销兴趣与职业目标。学校公开要求接受不同本科背景，因此重点将落在成绩、语言单项和完整材料质量上。",
@@ -322,6 +348,17 @@ export const recommendations: SchoolRecommendation[] = [
     isSelected: false,
     isConfirmed: false,
     officialProgramUrl: "https://www.essec.edu/en/program/master-in-management-international/?tab=admissions",
+    programDetails: {
+      introduction: "Master in Management 提供 Flexible 与 Intensive 学习路径，具体适用条件与课程安排以 ESSEC 官方页面为准。",
+      directions: ["Flexible Track", "Intensive Track", "国际管理"],
+      coreCourses: ["核心管理课程名称以当前 Track 的官方课程表为准"],
+      electiveCourses: ["Flexible Track 可选择较多个性化课程，具体清单待官方页面确认"],
+      learningOutcomes: ["建立综合管理基础", "形成国际化商业视角"],
+      teachingLocation: "Cergy / Singapore / Rabat（以录取 Track 为准）",
+      teachingFormat: "全日制；学习结构取决于所选 Track",
+      practicalProjects: ["该项公开信息暂未确认"],
+      careerDirections: ["综合管理", "战略与商业发展", "国际业务"],
+    },
     recommendationContent: {
       summary: "你的商科方向和国际经历可用于说明申请 MiM 的动机。ESSEC 提供 Flexible 与 Intensive 两种路径，并强调国际化学习；当前需先确认申请 Track、管理类考试和英语成绩，再判断材料准备重点。",
       personalFit: "你已确认的管理与市场营销方向能够支持 MiM 申请叙事，已有经历也可用于说明国际化职业目标；Intensive Track 是否适用仍取决于专业与国际经历证明。",
