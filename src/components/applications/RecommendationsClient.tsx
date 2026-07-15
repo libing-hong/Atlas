@@ -11,7 +11,8 @@ import { formatCNY, formatCNYFromFen } from "@/lib/format-currency";
 import { UniversityRankingRecord } from "@/lib/university-rankings";
 import { buildProgramPortfolio } from "@/lib/program-matching";
 import { getProgramContent, ProgramContentProfile, programKnowledgeFallback, programKnowledgeStatusCopy } from "@/lib/program-knowledge";
-import { readStudentProfile, writeStudentProfile } from "@/lib/student-profile";
+import { emptyStudentProfile, writeStudentProfile } from "@/lib/student-profile";
+import { readActivePlanningRun, readPlanningRun, readRunComparisonSelection, updatePlanningRun, writeRunComparisonSelection } from "@/lib/planning-store";
 
 const categoryCopy: Record<RecommendationCategory, { label: string; description: string }> = {
   reach: { label: "冲刺选择", description: "与目标匹配，但录取要求相对较高，需要重点准备申请材料。" },
@@ -23,12 +24,9 @@ const categoryCopy: Record<RecommendationCategory, { label: string; description:
 
 const comparisonSelectionKey = "atlas.school-comparison.selection.v1";
 
-export function RecommendationsClient() {
+export function RecommendationsClient({ runId: requestedRunId }: { runId?: string }) {
   const router = useRouter();
-  const [selectedIds, setSelectedIds] = useState<string[]>(() => {
-    const saved = readApplicationSelection();
-    return saved.length ? saved : recommendations.filter((school) => school.isSelected).map((school) => school.id);
-  });
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [category, setCategory] = useState<RecommendationCategory | "all">("all");
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [compareLoading, setCompareLoading] = useState(false);
@@ -39,7 +37,10 @@ export function RecommendationsClient() {
   const [error, setError] = useState("");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
-  const [profile, setProfile] = useState(() => readStudentProfile());
+  const initialRun = requestedRunId ? readPlanningRun(requestedRunId) : readActivePlanningRun();
+  const [runId, setRunId] = useState(initialRun?.id ?? requestedRunId ?? "");
+  const [profile, setProfile] = useState(initialRun?.profile ?? emptyStudentProfile);
+  const [runMissing, setRunMissing] = useState(false);
   const [targetCountries, setTargetCountries] = useState(profile.targetCountries.join("、"));
   const [targetSubjects, setTargetSubjects] = useState(profile.targetSubjects.join("、"));
   const regeneratedRecommendations = useMemo(() => buildProgramPortfolio(profile, recommendations).map(({ school, result }) => ({
@@ -62,18 +63,25 @@ export function RecommendationsClient() {
   const filtered = useMemo(() => category === "all" ? regeneratedRecommendations : regeneratedRecommendations.filter((school) => school.category === category), [category, regeneratedRecommendations]);
 
   useEffect(() => {
-    if (!readApplicationSelection().length && selectedIds.length) writeApplicationSelection(selectedIds);
-  }, [selectedIds]);
+    const run = requestedRunId ? readPlanningRun(requestedRunId) : readActivePlanningRun();
+    if (!run) { setRunMissing(true); return; }
+    setRunId(run.id);
+    setProfile(run.profile);
+    setTargetCountries(run.profile.targetCountries.join("、"));
+    setTargetSubjects(run.profile.targetSubjects.join("、"));
+    setSelectedIds(readApplicationSelection(run.id));
+    setRunMissing(false);
+  }, [requestedRunId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
-        const saved = JSON.parse(window.localStorage.getItem(comparisonSelectionKey) ?? "[]") as string[];
+        const saved = readRunComparisonSelection(runId);
         setCompareIds(saved.filter((id) => recommendations.some((school) => school.id === id)).slice(0, 3));
       } catch { setCompareIds([]); }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [runId]);
 
   useEffect(() => {
     const universityIds = recommendations.map((school) => school.universityId).join(",");
@@ -83,16 +91,16 @@ export function RecommendationsClient() {
       .catch(() => setRankings({}));
   }, []);
 
-  function toggleSelected(id: string) { setSelectedIds((ids) => { const next = ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]; writeApplicationSelection(next); return next; }); }
-  function updateCompare(next: string[]) { setCompareIds(next); window.localStorage.setItem(comparisonSelectionKey, JSON.stringify(next)); setCompareError(""); }
+  function toggleSelected(id: string) { if (!runId) return; setSelectedIds((ids) => { const next = ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]; writeApplicationSelection(next, runId); return next; }); }
+  function updateCompare(next: string[]) { if (!runId) return; setCompareIds(next); writeRunComparisonSelection(runId, next); setCompareError(""); }
   function toggleCompare(id: string) { const next = compareIds.includes(id) ? compareIds.filter((item) => item !== id) : compareIds.length < 3 ? [...compareIds, id] : compareIds; updateCompare(next); if (next === compareIds && !compareIds.includes(id)) setCompareError("最多选择 3 所学校，请先移除一所。"); }
   async function handleCompare() {
     if (compareIds.length !== 3 || compareLoading) return;
     setCompareLoading(true); setCompareError("");
     try {
-      window.localStorage.setItem(comparisonSelectionKey, JSON.stringify(compareIds));
+      writeRunComparisonSelection(runId, compareIds);
       await new Promise((resolve) => window.setTimeout(resolve, 500));
-      router.push("/applications/recommendations/compare");
+      router.push(`/applications/recommendations/compare?runId=${encodeURIComponent(runId)}`);
     } catch { setCompareError("暂时无法生成学校对比，请重新尝试。"); setCompareLoading(false); }
   }
   async function handleConfirm() {
@@ -100,15 +108,18 @@ export function RecommendationsClient() {
     setConfirming(true);
     setError("");
     try {
-      writeApplicationSelection(selectedIds);
-      await new Promise((resolve) => window.setTimeout(resolve, 500));
-      setCheckoutOpen(true);
-      setConfirming(false);
+      if (!runId) throw new Error("No active planning run");
+      writeApplicationSelection(selectedIds, runId);
+      confirmApplications(selectedIds, regeneratedRecommendations, runId);
+      await new Promise((resolve) => window.setTimeout(resolve, 350));
+      router.push(`/applications?runId=${encodeURIComponent(runId)}`);
     } catch {
       setError("申请名单暂时无法保存，请重新尝试。");
       setConfirming(false);
     }
   }
+
+  if (runMissing) return <DashboardShell><div className="mx-auto max-w-xl rounded-[24px] border border-[#e7d0c7] bg-[#fffaf3] p-7 text-center"><h1 className="font-editorial text-4xl font-semibold">没有找到本次申请规划。</h1><a href="/planner" className="mt-6 inline-flex rounded-full bg-[#2f2924] px-6 py-3 text-sm text-white">重新开始免费规划</a></div></DashboardShell>;
 
   return <DashboardShell>
     <div className="space-y-6 pb-24">
@@ -127,8 +138,8 @@ export function RecommendationsClient() {
       <section className={`${compareIds.length ? "relative" : "sticky bottom-3 z-20"} rounded-[22px] border border-[#d8ccbe] bg-[#fffaf3]/95 p-4 shadow-[0_16px_40px_rgba(88,72,55,0.12)] backdrop-blur`}><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="text-sm font-semibold text-[#2f2924]">已选择 {selectedIds.length} 所学校</p><p className="mt-1 text-xs text-[#6f6256]">建议确认 4–6 所，之后 Atlas 会为每所学校创建材料准备入口。</p>{error ? <p className="mt-2 text-sm text-[#8a5f54]">{error}</p> : null}</div><button type="button" onClick={handleConfirm} disabled={!selectedIds.length || confirming} className="inline-flex items-center justify-center gap-2 rounded-full bg-[#2f2924] px-5 py-3 text-sm font-medium text-[#fffaf3] disabled:cursor-not-allowed disabled:opacity-40"><Check size={16} />{confirming ? "正在保存申请名单…" : "确认申请名单"}</button></div></section>
       {compareIds.length ? <CompareBar ids={compareIds} loading={compareLoading} error={compareError} onRemove={toggleCompare} onClear={() => updateCompare([])} onConfirm={handleCompare} /> : null}
       {detailId ? <DetailPanel school={regeneratedRecommendations.find((school) => school.id === detailId)!} isSelected={selectedIds.includes(detailId)} onClose={() => setDetailId(null)} onSelect={() => toggleSelected(detailId)} /> : null}
-      {checkoutOpen ? <ServiceChoice selectedCount={selectedIds.length} onCancel={() => setCheckoutOpen(false)} onSelf={() => { writeApplicationMode("DIY"); const records = confirmApplications(selectedIds, recommendations); router.push(records[0] ? `/applications/${records[0].id}/materials` : "/applications?confirmed=1"); }} onSubmission={() => { const records = confirmApplications(selectedIds, recommendations); const order = createApplicationSubmissionOrder(records); if (!order.items.length) { setError("所选学校均已购买代递交服务，无需重复付款。"); setCheckoutOpen(false); return; } router.push("/checkout/application-submission"); }} onConsultation={() => { writeApplicationMode("advisor_assisted"); confirmApplications(selectedIds, recommendations); createFixedServiceOrder("advisor_consultation"); router.push("/checkout/advisor-consultation"); }} onFullService={() => { confirmApplications(selectedIds, recommendations); router.push("/applications/service-comparison#full-service"); }} /> : null}
-      {adjustOpen ? <GoalDrawer countries={targetCountries} subjects={targetSubjects} onCountries={setTargetCountries} onSubjects={setTargetSubjects} onClose={() => setAdjustOpen(false)} onSave={() => { const nextProfile = { ...profile, targetCountries: targetCountries.split("、").map((item) => item.trim()).filter(Boolean), targetSubjects: targetSubjects.split("、").map((item) => item.trim()).filter(Boolean) }; writeStudentProfile(nextProfile); setProfile(nextProfile); setAdjustOpen(false); }} /> : null}
+      {checkoutOpen ? <ServiceChoice selectedCount={selectedIds.length} onCancel={() => setCheckoutOpen(false)} onSelf={() => { writeApplicationMode("DIY"); const records = confirmApplications(selectedIds, regeneratedRecommendations, runId); router.push(`/applications?runId=${encodeURIComponent(runId)}`); }} onSubmission={() => { const records = confirmApplications(selectedIds, regeneratedRecommendations, runId); const order = createApplicationSubmissionOrder(records); if (!order.items.length) { setError("所选学校均已购买代递交服务，无需重复付款。"); setCheckoutOpen(false); return; } router.push("/checkout/application-submission"); }} onConsultation={() => { writeApplicationMode("advisor_assisted"); const records = confirmApplications(selectedIds, regeneratedRecommendations, runId); createFixedServiceOrder("advisor_consultation", records); router.push("/checkout/advisor-consultation"); }} onFullService={() => { confirmApplications(selectedIds, regeneratedRecommendations, runId); router.push("/applications/service-comparison#full-service"); }} /> : null}
+      {adjustOpen ? <GoalDrawer countries={targetCountries} subjects={targetSubjects} onCountries={setTargetCountries} onSubjects={setTargetSubjects} onClose={() => setAdjustOpen(false)} onSave={() => { const nextProfile = { ...profile, targetCountries: targetCountries.split("、").map((item) => item.trim()).filter(Boolean), targetSubjects: targetSubjects.split("、").map((item) => item.trim()).filter(Boolean) }; writeStudentProfile(nextProfile); updatePlanningRun(runId, { profile: nextProfile }); setProfile(nextProfile); setAdjustOpen(false); }} /> : null}
     </div>
   </DashboardShell>;
 }
