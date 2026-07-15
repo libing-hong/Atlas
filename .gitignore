@@ -10,3 +10,11 @@ build
 .config
 *.log
 .atlas-private/
+# confidential admission sources
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.key
+*.plaintext.json
+data/private/*.decrypted.*
