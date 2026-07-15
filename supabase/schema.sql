@@ -160,3 +160,114 @@ create table public.ranking_match_review_queue (
 
 create index idx_university_aliases_university_id on public.university_aliases(university_id);
 create index idx_university_rankings_lookup on public.university_rankings(university_id, ranking_provider, ranking_year);
+
+
+-- Program knowledge base. Public program content is separated from confidential admission rules.
+create table public.programs (
+  id text primary key,
+  university_id text not null references public.universities(id) on delete cascade,
+  canonical_name text not null,
+  intake_year int not null,
+  intake_term text not null check (intake_term in ('spring', 'summer', 'fall')),
+  official_program_url text not null,
+  status text not null default 'active' check (status in ('active', 'closed', 'archived')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (university_id, canonical_name, intake_year, intake_term)
+);
+
+create table public.program_content_profiles (
+  program_id text primary key references public.programs(id) on delete cascade,
+  introduction text not null,
+  target_students text,
+  learning_focus jsonb not null default '[]'::jsonb,
+  learning_outcomes jsonb not null default '[]'::jsonb,
+  practical_components jsonb not null default '[]'::jsonb,
+  career_directions jsonb not null default '[]'::jsonb,
+  duration_options jsonb not null default '[]'::jsonb,
+  accreditation jsonb not null default '[]'::jsonb,
+  teaching_location text,
+  teaching_format text,
+  official_curriculum_url text,
+  source_retrieved_at timestamptz not null,
+  last_verified_at timestamptz not null,
+  verification_status text not null check (verification_status in ('verified_official', 'partially_verified', 'pending_review', 'outdated')),
+  coverage_status text not null check (coverage_status in ('verified', 'partially_verified', 'fetching', 'manual_review', 'not_available')),
+  updated_at timestamptz not null default now()
+);
+
+create table public.program_course_modules (
+  id uuid primary key default gen_random_uuid(),
+  program_id text not null references public.programs(id) on delete cascade,
+  code text,
+  name text not null,
+  credits numeric(6, 2),
+  module_type text not null check (module_type in ('core', 'optional', 'project', 'internship', 'dissertation')),
+  display_order int not null default 0,
+  source_url text not null,
+  last_verified_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create table public.program_requirement_sets (
+  id uuid primary key default gen_random_uuid(),
+  program_id text not null references public.programs(id) on delete cascade,
+  applicant_country text not null,
+  degree_requirement text,
+  academic_requirement jsonb not null default '{}'::jsonb,
+  subject_background jsonb not null default '{}'::jsonb,
+  language_requirement jsonb not null default '{}'::jsonb,
+  work_experience_requirement jsonb not null default '{}'::jsonb,
+  prerequisite_requirement jsonb not null default '{}'::jsonb,
+  materials_requirement jsonb not null default '{}'::jsonb,
+  tuition jsonb not null default '{}'::jsonb,
+  deadline jsonb not null default '{}'::jsonb,
+  official_source_url text not null,
+  last_verified_at timestamptz not null,
+  verification_status text not null check (verification_status in ('verified_official', 'partially_verified', 'pending_review', 'outdated')),
+  unique (program_id, applicant_country)
+);
+
+-- Never expose rows from this table to browser clients. Only server-side jobs and decision functions may query it.
+create table private_institution_admission_rules (
+  id uuid primary key default gen_random_uuid(),
+  target_university_id text not null references public.universities(id) on delete cascade,
+  faculty_name text,
+  program_id text references public.programs(id) on delete cascade,
+  rule_type text not null check (rule_type in ('explicit_institution_list', 'tier_list', '985_211_double_first_class', 'key_non_key_institution', 'all_recognized_institutions', 'case_by_case', 'program_specific')),
+  accepted_institution_id text,
+  institution_tier text,
+  required_average numeric(5, 2),
+  required_average_max numeric(5, 2),
+  source_year int,
+  verification_status text not null check (verification_status in ('partner_reference', 'verified_official', 'needs_official_check', 'outdated')),
+  confidential boolean not null default true check (confidential),
+  encrypted_source_reference text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.knowledge_review_queue (
+  id uuid primary key default gen_random_uuid(),
+  program_id text references public.programs(id) on delete cascade,
+  review_type text not null check (review_type in ('source_conflict', 'outdated_source', 'institution_match', 'content_extraction')),
+  summary text not null,
+  status text not null default 'pending' check (status in ('pending', 'in_review', 'resolved', 'dismissed')),
+  source_payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  resolved_at timestamptz
+);
+
+create index idx_programs_university_intake on public.programs(university_id, intake_year, intake_term);
+create index idx_program_modules_program on public.program_course_modules(program_id, module_type, display_order);
+create index idx_program_requirements_lookup on public.program_requirement_sets(program_id, applicant_country);
+create index idx_private_institution_rules_lookup on private_institution_admission_rules(target_university_id, program_id, accepted_institution_id);
+
+alter table public.programs enable row level security;
+alter table public.program_content_profiles enable row level security;
+alter table public.program_course_modules enable row level security;
+alter table public.program_requirement_sets enable row level security;
+alter table private_institution_admission_rules enable row level security;
+alter table public.knowledge_review_queue enable row level security;
+
+comment on table private_institution_admission_rules is 'Confidential partner admission rules. No browser-facing select policy is permitted.';
