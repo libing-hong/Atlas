@@ -56,7 +56,7 @@ export function RecommendationsClient() {
       ...school.recommendationContent,
       summary: result.recommendationReason,
       personalFit: [result.recommendationReason, ...result.matchedItems].join(" "),
-      cautions: [...result.preparationItems.map((item) => `${item.label}：${item.reason}`), ...result.unresolvedItems, ...result.category === "currently_not_eligible" ? ["当前未进入主要推荐名单"] : []],
+      cautions: [...result.preparationItems.map((item) => `${item.label}：${item.reason}`), ...result.unresolvedItems, ...(result.category === "currently_not_eligible" ? ["当前未进入主要推荐名单"] : [])],
     },
   })), [profile]);
   const filtered = useMemo(() => category === "all" ? regeneratedRecommendations : regeneratedRecommendations.filter((school) => school.category === category), [category, regeneratedRecommendations]);
