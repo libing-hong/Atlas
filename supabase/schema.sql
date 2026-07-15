@@ -341,3 +341,42 @@ alter table public.program_ingestion_jobs enable row level security;
 
 comment on table public.extracted_program_fields is 'Field-level official evidence. Source text remains internal and must not be returned by public APIs.';
 comment on table public.program_source_snapshots is 'Internal change-detection metadata; raw snapshots belong in private object storage.';
+
+
+-- Confidential workbook imports. These tables intentionally have no browser-facing policies.
+create table private_admission_import_jobs (
+  id uuid primary key default gen_random_uuid(),
+  source_name_hash text not null,
+  source_hash text not null,
+  sheet_count int not null,
+  imported_rule_count int not null default 0,
+  review_issue_count int not null default 0,
+  skipped_sheet_count int not null default 0,
+  status text not null check (status in ('running', 'needs_review', 'completed', 'failed')),
+  last_error text,
+  created_at timestamptz not null default now(),
+  completed_at timestamptz
+);
+
+create table private_admission_import_issues (
+  id uuid primary key default gen_random_uuid(),
+  import_job_id uuid not null references private_admission_import_jobs(id) on delete cascade,
+  sheet_name_hash text not null,
+  row_number int,
+  issue_code text not null check (issue_code in ('parser_missing', 'unresolved_university', 'ambiguous_rule', 'invalid_average', 'conflicting_rows')),
+  summary text not null,
+  evidence_fingerprint text,
+  created_at timestamptz not null default now()
+);
+
+alter table private_institution_admission_rules
+  add column import_job_id uuid references private_admission_import_jobs(id) on delete set null;
+
+create index idx_private_import_jobs_source on private_admission_import_jobs(source_hash, created_at desc);
+create index idx_private_import_issues_job on private_admission_import_issues(import_job_id, issue_code);
+
+alter table private_admission_import_jobs enable row level security;
+alter table private_admission_import_issues enable row level security;
+
+comment on table private_admission_import_jobs is 'Confidential source imports; source names are hashed and no browser policy is allowed.';
+comment on table private_admission_import_issues is 'Knowledge Ops review issues from confidential imports; no browser policy is allowed.';
