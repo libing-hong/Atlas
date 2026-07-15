@@ -209,3 +209,23 @@ export async function recordProgramSourceSnapshot(input: {
   }
   return { recorded: true, changed, contentHash };
 }
+
+
+export async function enqueueDueProgramRefreshes(limit = 25, staleAfterDays = 30) {
+  const client = adminClient();
+  if (!client) return { queued: 0, reason: "Knowledge database is not configured" };
+  const threshold = new Date(Date.now() - staleAfterDays * 24 * 60 * 60 * 1000).toISOString();
+  const due = await client.from("program_content_profiles")
+    .select("program_id")
+    .lt("last_verified_at", threshold)
+    .order("last_verified_at", { ascending: true })
+    .limit(limit);
+  if (due.error) throw due.error;
+
+  let queued = 0;
+  for (const row of due.data ?? []) {
+    const result = await enqueueProgramIngestion(row.program_id, "scheduled_refresh", 35);
+    if (result.queued && !result.existing) queued += 1;
+  }
+  return { queued };
+}
