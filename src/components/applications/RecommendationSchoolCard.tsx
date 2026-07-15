@@ -34,7 +34,7 @@ export function RecommendationSchoolCard({ school, ranking, isSelected, isCompar
       </a>
     </div>
 
-    <p className="mt-4 text-base font-medium text-[#4a3d34]">{school.programName}</p>
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-base font-medium text-[#4a3d34]">{school.programName}</p>{school.atlasMatch ? <div className="rounded-full border border-[#d8ccbe] bg-[#fffaf3] px-3 py-1.5 text-xs text-[#5d5148]"><strong className="text-[#2f2924]">Atlas 方案匹配度 {school.atlasMatch.score}</strong><span className="ml-1 text-[#8f847a]">/ 100</span></div> : null}</div>
     <div className="mt-5 rounded-2xl bg-[#f7f0e8] p-4">
       <p className="text-xs uppercase tracking-[0.18em] text-[#9a8b7c]">Atlas 为什么推荐</p>
       <p className="mt-2 text-sm leading-6 text-[#4a3d34]">{school.recommendationContent.summary}</p>
@@ -62,7 +62,7 @@ export function RecommendationSchoolCard({ school, ranking, isSelected, isCompar
         <button type="button" onClick={onSelect} className={`inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium ${isSelected ? "border border-[#c9dbc5] bg-[#e7ece7] text-[#4f6d54]" : "bg-[#2f2924] text-white"}`}>{isSelected ? <Check size={15} /> : <Plus size={15} />}{isSelected ? "已加入名单" : "加入申请名单"}</button>
       </div>
     </div>
-    <p className="mt-3 text-xs leading-5 text-[#8f847a]">根据你目前确认的信息生成；推荐不等于获得录取资格，最终结果仍以学校官方审核为准。</p>
+    <p className="mt-3 text-xs leading-5 text-[#8f847a]">Atlas 方案匹配度用于帮助排序申请方案，不代表学校录取概率。推荐不等于获得录取资格，最终结果仍以学校官方审核为准。</p>
   </Card>;
 }
 
