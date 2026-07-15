@@ -1,8 +1,9 @@
 import "server-only";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createHash } from "node:crypto";
 import { getProgramContent } from "../program-knowledge";
 import type { ProgramContentProfile } from "../program-knowledge";
-import type { ExtractedProgramField, ProgramIngestionJob, ProgramIngestionJobStatus } from "./types";
+import type { ExtractedProgramField, ExtractionMethod, ProgramIngestionJob, ProgramIngestionJobStatus, ProgramSourceCandidate } from "./types";
 
 function adminClient(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -156,4 +157,55 @@ export async function publishProgramContent(input: {
     if (moduleResult.error) throw moduleResult.error;
   }
   return { published: true };
+}
+
+
+export async function recordProgramSourceSnapshot(input: {
+  programId: string;
+  source: ProgramSourceCandidate;
+  extractionMethod: ExtractionMethod;
+  content: string;
+  pageTitle?: string;
+  httpStatus?: number;
+}) {
+  const client = adminClient();
+  const contentHash = createHash("sha256").update(input.content).digest("hex");
+  if (!client) return { recorded: false, changed: false, contentHash };
+  const previous = await client.from("program_sources")
+    .select("id,content_hash")
+    .eq("program_id", input.programId)
+    .eq("source_url", input.source.url)
+    .maybeSingle();
+  const changed = Boolean(previous.data?.content_hash && previous.data.content_hash !== contentHash);
+  const sourceResult = await client.from("program_sources").upsert({
+    program_id: input.programId,
+    source_url: input.source.url,
+    source_type: input.source.type,
+    official_domain: input.source.officialDomain,
+    discovery_method: input.source.discoveryMethod,
+    extraction_method: input.extractionMethod,
+    confidence: input.source.confidence,
+    robots_checked_at: new Date().toISOString(),
+    last_retrieved_at: new Date().toISOString(),
+    content_hash: contentHash,
+    status: "active",
+  }, { onConflict: "program_id,source_url" }).select("id").single();
+  if (sourceResult.error) throw sourceResult.error;
+  const snapshotResult = await client.from("program_source_snapshots").upsert({
+    program_source_id: sourceResult.data.id,
+    content_hash: contentHash,
+    page_title: input.pageTitle ?? null,
+    retrieved_at: new Date().toISOString(),
+    http_status: input.httpStatus ?? null,
+    change_status: previous.data ? changed ? "changed" : "unchanged" : "new",
+  }, { onConflict: "program_source_id,content_hash" });
+  if (snapshotResult.error) throw snapshotResult.error;
+  if (changed) {
+    await createKnowledgeReview(input.programId, "学校官方页面内容发生变化，发布前需要复核", {
+      sourceUrl: input.source.url,
+      previousHash: previous.data?.content_hash,
+      currentHash: contentHash,
+    });
+  }
+  return { recorded: true, changed, contentHash };
 }
