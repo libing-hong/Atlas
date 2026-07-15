@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Check, LoaderCircle } from "lucide-react";
 import { Card } from "@/components/Card";
 import { DashboardShell } from "@/components/PageShell";
-import { recommendations } from "@/lib/application-prototype-data";
+import { ApplicationRecord, recommendations } from "@/lib/application-prototype-data";
 import {
   ApplicationMode,
   ApplicationRecord,
