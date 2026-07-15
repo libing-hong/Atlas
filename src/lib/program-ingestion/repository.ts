@@ -1,8 +1,8 @@
 import "server-only";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { getProgramContent } from "../program-knowledge";
-import type { ProgramContentProfile } from "../program-knowledge";
+import type { CourseModule, ProgramContentProfile } from "../program-knowledge";
 import type { ExtractedProgramField, ExtractionMethod, ProgramIngestionJob, ProgramIngestionJobStatus, ProgramSourceCandidate } from "./types";
 
 function adminClient(): SupabaseClient | null {
@@ -25,7 +25,7 @@ export async function getProgramContentFromStore(programId: string): Promise<Pro
     code: module.code ?? undefined,
     name: module.name,
     credits: module.credits === null ? undefined : Number(module.credits),
-    type: module.module_type,
+    type: module.module_type as CourseModule["type"],
   }));
   return {
     programId,
