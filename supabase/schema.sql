@@ -380,3 +380,34 @@ alter table private_admission_import_issues enable row level security;
 
 comment on table private_admission_import_jobs is 'Confidential source imports; source names are hashed and no browser policy is allowed.';
 comment on table private_admission_import_issues is 'Knowledge Ops review issues from confidential imports; no browser policy is allowed.';
+
+
+create or replace function public.claim_program_ingestion_job()
+returns table(job_id uuid, program_id text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  with candidate as (
+    select jobs.id
+    from public.program_ingestion_jobs jobs
+    where jobs.status = 'queued'
+    order by jobs.priority desc, jobs.created_at
+    for update skip locked
+    limit 1
+  )
+  update public.program_ingestion_jobs jobs
+  set status = 'discovering',
+      attempts = jobs.attempts + 1,
+      locked_at = now(),
+      updated_at = now()
+  from candidate
+  where jobs.id = candidate.id
+  returning jobs.id, jobs.program_id;
+end;
+$$;
+
+revoke all on function public.claim_program_ingestion_job() from public, anon, authenticated;
+grant execute on function public.claim_program_ingestion_job() to service_role;
