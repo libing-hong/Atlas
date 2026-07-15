@@ -16,7 +16,7 @@ export function ApplicationHomeClient() {
   const selectedIds = applicationState.selection;
   const workspacePurchased = applicationState.workspacePurchased;
   const paidOrders = applicationState.orders.filter((order) => order.status === "paid");
-  const latestPaidOrder = paidOrders.at(-1);
+  const latestPaidOrder = paidOrders[paidOrders.length - 1];
   const selected = records.length ? records.map((record) => recommendations.find((school) => school.id === record.schoolRecommendationId)).filter(Boolean) as typeof recommendations : recommendations.filter((school) => selectedIds.includes(school.id) || (!selectedIds.length && school.isSelected));
   const primaryTask = getAtlasPrimaryTask({ applicationRecords: records, selectedSchoolIds: selectedIds, workspacePurchased, journeyNodes: [] });
   const state: ApplicationHomeState = records.length ? "school_confirmed" : "report_ready";
