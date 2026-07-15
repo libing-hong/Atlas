@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run test:planning && next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:planning": "tsx --test src/lib/planning-report.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.1",
@@ -23,6 +24,7 @@
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.2.10",
     "tailwindcss": "^4.1.18",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "tsx": "^4.20.6"
   }
 }
