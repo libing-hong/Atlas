@@ -1,17 +1,54 @@
 import { ApplicationMaterial, ApplicationRecord, SchoolRecommendation, commonMaterials, createApplicationRecord } from "./application-prototype-data";
-import { PurchasedService } from "./service-pricing";
+import { PurchasedService, servicePricing } from "./service-pricing";
 
 const selectionKey = "atlas.application.selection.v1";
 const recordsKey = "atlas.application.records.v1";
 const workspaceKey = "atlas.application.workspace.v1";
 const serviceKey = "atlas.application.purchased-service.v1";
 const applicationModeKey = "atlas.application.mode.v1";
+const serviceOrdersKey = "atlas.service-orders.v1";
+const activeServiceOrderKey = "atlas.active-service-order.v1";
 const applicationStateEvent = "atlas-application-state-change";
 
 export type ApplicationMode = "unselected" | "DIY" | "managed" | "advisor_assisted";
+export type ServiceType = "single_school_submission" | "advisor_consultation" | "full_service_uk_au" | "full_service_france";
+export type ServiceOrderStatus = "draft" | "pending_payment" | "processing" | "paid" | "cancelled" | "refunded";
+
+export type ServiceOrderItem = {
+  id: string;
+  orderId: string;
+  applicationId?: string;
+  schoolId?: string;
+  schoolName?: string;
+  programName?: string;
+  unitPrice: number;
+  quantity: number;
+  totalPrice: number;
+  unitPriceFen: number;
+  totalPriceFen: number;
+};
+
+export type ServiceOrder = {
+  id: string;
+  userId: string;
+  serviceType: ServiceType;
+  status: ServiceOrderStatus;
+  currency: "CNY";
+  subtotal: number;
+  total: number;
+  subtotalFen: number;
+  totalFen: number;
+  items: ServiceOrderItem[];
+  createdAt: string;
+  paidAt?: string;
+};
 
 function emitApplicationStateChange() {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(applicationStateEvent));
+}
+
+function createId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 export function subscribeToApplicationState(onChange: () => void) {
@@ -31,6 +68,7 @@ export function getApplicationStateSnapshot() {
     records: readApplicationRecords(),
     mode: readApplicationMode(),
     workspacePurchased: isApplicationWorkspacePurchased(),
+    orders: readServiceOrders(),
   });
 }
 
@@ -57,8 +95,8 @@ export function isApplicationWorkspacePurchased(): boolean {
 
 export function readPurchasedService(): PurchasedService {
   if (typeof window === "undefined") return "none";
-  const value = window.localStorage.getItem(serviceKey);
-  return value === "single_school_submission" || value === "advisor_consultation" ? value : "none";
+  const value = window.localStorage.getItem(serviceKey) as PurchasedService | null;
+  return value && ["single_school_submission", "advisor_consultation", "full_service_uk_au", "full_service_france"].includes(value) ? value : "none";
 }
 
 export function purchaseService(service: Exclude<PurchasedService, "none">) {
@@ -123,14 +161,171 @@ export function confirmApplications(selectedIds: string[], schools: SchoolRecomm
   const records = readApplicationRecords();
   const nextRecords = records.filter((record) => selectedIds.includes(record.schoolRecommendationId));
   for (const school of schools.filter((item) => selectedIds.includes(item.id))) {
-    const record = createApplicationRecord(school);
+    const generated = createApplicationRecord(school);
     const index = nextRecords.findIndex((item) => item.schoolRecommendationId === school.id);
-    if (index >= 0) nextRecords[index] = { ...nextRecords[index], ...record };
-    else nextRecords.push(record);
+    if (index >= 0) {
+      const existing = nextRecords[index];
+      nextRecords[index] = {
+        ...generated,
+        ...existing,
+        universityName: generated.universityName,
+        programName: generated.programName,
+        country: generated.country,
+        intake: generated.intake,
+        nextDeadline: generated.nextDeadline,
+      };
+    } else nextRecords.push(generated);
   }
   writeApplicationSelection(selectedIds);
   writeApplicationRecords(nextRecords);
   return nextRecords;
+}
+
+export function readServiceOrders(): ServiceOrder[] {
+  if (typeof window === "undefined") return [];
+  try { return JSON.parse(window.localStorage.getItem(serviceOrdersKey) ?? "[]") as ServiceOrder[]; } catch { return []; }
+}
+
+function writeServiceOrders(orders: ServiceOrder[]) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(serviceOrdersKey, JSON.stringify(orders));
+    emitApplicationStateChange();
+  }
+}
+
+export function readActiveServiceOrder(serviceType?: ServiceType) {
+  if (typeof window === "undefined") return undefined;
+  const activeId = window.localStorage.getItem(activeServiceOrderKey);
+  const orders = readServiceOrders();
+  const active = orders.find((order) => order.id === activeId);
+  if (active && (!serviceType || active.serviceType === serviceType)) return active;
+  return [...orders].reverse().find((order) => !serviceType || order.serviceType === serviceType);
+}
+
+export function getPaidSubmissionApplicationIds() {
+  return new Set(readServiceOrders()
+    .filter((order) => order.serviceType === "single_school_submission" && order.status === "paid")
+    .flatMap((order) => order.items.map((item) => item.applicationId).filter(Boolean) as string[]));
+}
+
+function saveDraftOrder(order: ServiceOrder) {
+  const orders = readServiceOrders().filter((item) => item.id !== order.id);
+  writeServiceOrders([...orders, order]);
+  if (typeof window !== "undefined") window.localStorage.setItem(activeServiceOrderKey, order.id);
+  return order;
+}
+
+export function createApplicationSubmissionOrder(records: ApplicationRecord[]) {
+  const paidApplicationIds = getPaidSubmissionApplicationIds();
+  const eligible = records.filter((record) => record.serviceType !== "single_school" && !paidApplicationIds.has(record.id));
+  const orderId = createId("submission");
+  const items = eligible.map((record) => ({
+    id: createId("item"),
+    orderId,
+    applicationId: record.id,
+    schoolId: record.schoolRecommendationId,
+    schoolName: record.universityName,
+    programName: record.programName,
+    unitPrice: servicePricing.singleSchoolSubmission,
+    quantity: 1,
+    totalPrice: servicePricing.singleSchoolSubmission,
+    unitPriceFen: servicePricing.singleSchoolSubmissionFen,
+    totalPriceFen: servicePricing.singleSchoolSubmissionFen,
+  }));
+  const totalFen = items.length * servicePricing.singleSchoolSubmissionFen;
+  return saveDraftOrder({
+    id: orderId,
+    userId: "prototype-user",
+    serviceType: "single_school_submission",
+    status: "pending_payment",
+    currency: "CNY",
+    subtotal: totalFen / 100,
+    total: totalFen / 100,
+    subtotalFen: totalFen,
+    totalFen,
+    items,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+export function createFixedServiceOrder(serviceType: Exclude<ServiceType, "single_school_submission">, records: ApplicationRecord[] = []) {
+  const priceFen = serviceType === "advisor_consultation"
+    ? servicePricing.advisorConsultationFen
+    : serviceType === "full_service_uk_au"
+      ? servicePricing.fullServiceUkAuFen
+      : servicePricing.fullServiceFranceFen;
+  const orderId = createId(serviceType);
+  const order: ServiceOrder = {
+    id: orderId,
+    userId: "prototype-user",
+    serviceType,
+    status: "pending_payment",
+    currency: "CNY",
+    subtotal: priceFen / 100,
+    total: priceFen / 100,
+    subtotalFen: priceFen,
+    totalFen: priceFen,
+    items: [{
+      id: createId("item"),
+      orderId,
+      unitPrice: priceFen / 100,
+      quantity: 1,
+      totalPrice: priceFen / 100,
+      unitPriceFen: priceFen,
+      totalPriceFen: priceFen,
+      schoolName: serviceType === "advisor_consultation" ? "一对一留学规划" : serviceType === "full_service_uk_au" ? "英国／澳洲全流程" : "法国商学院全流程",
+      programName: records.length ? `覆盖 ${records.length} 所当前申请学校` : undefined,
+    }],
+    createdAt: new Date().toISOString(),
+  };
+  return saveDraftOrder(order);
+}
+
+export function markServiceOrderProcessing(orderId: string) {
+  const orders = readServiceOrders();
+  const next = orders.map((order) => order.id === orderId ? { ...order, status: "processing" as const } : order);
+  writeServiceOrders(next);
+  return next.find((order) => order.id === orderId);
+}
+
+export function completeServiceOrder(orderId: string) {
+  const orders = readServiceOrders();
+  const target = orders.find((order) => order.id === orderId);
+  if (!target || target.status === "paid") return target;
+  const paidAt = new Date().toISOString();
+  const nextOrders = orders.map((order) => order.id === orderId ? { ...order, status: "paid" as const, paidAt } : order);
+  writeServiceOrders(nextOrders);
+
+  if (target.serviceType === "single_school_submission") {
+    const purchasedIds = new Set(target.items.map((item) => item.applicationId));
+    writeApplicationRecords(readApplicationRecords().map((record) => purchasedIds.has(record.id) ? {
+      ...record,
+      status: "manual_review" as const,
+      serviceType: "single_school" as const,
+      applicationProgress: Math.max(record.applicationProgress, 82),
+      nextAction: "等待 Atlas 审核申请材料与基本信息",
+    } : record));
+    writeApplicationMode("managed");
+    purchaseService("single_school_submission");
+  } else if (target.serviceType === "advisor_consultation") {
+    writeApplicationMode("advisor_assisted");
+    purchaseService("advisor_consultation");
+  } else {
+    const countryMatch = (record: ApplicationRecord) => target.serviceType === "full_service_france"
+      ? record.country === "法国" || record.country === "FR"
+      : ["英国", "澳洲", "GB", "AU"].includes(record.country);
+    writeApplicationRecords(readApplicationRecords().map((record) => countryMatch(record) ? {
+      ...record,
+      status: "manual_review" as const,
+      serviceType: "full_service" as const,
+      applicationProgress: Math.max(record.applicationProgress, 82),
+      nextAction: "等待 Atlas 启动全流程服务审核",
+    } : record));
+    writeApplicationMode("managed");
+    purchaseService(target.serviceType);
+  }
+
+  return nextOrders.find((order) => order.id === orderId);
 }
 
 export function getMaterialsForApplication(record: ApplicationRecord, school: SchoolRecommendation): ApplicationMaterial[] {
