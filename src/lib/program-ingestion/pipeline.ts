@@ -117,7 +117,7 @@ export async function ingestProgramContent(jobId: string, input: ProgramDiscover
           source,
           extractionMethod,
           content: finalHtml,
-          pageTitle: extracted.pageTitle,
+          pageTitle: extracted.title,
           httpStatus: response.status,
         });
         sourceChanged ||= snapshot.changed;
