@@ -2,7 +2,7 @@ import "server-only";
 import { discoverProgramSources, OfficialSiteSearchAdapter } from "./source-discovery";
 import { appearsJavascriptDependent, extractStaticHtml, validateProgramIdentity } from "./extractors";
 import { fetchOfficialPage } from "./source-policy";
-import { createKnowledgeReview, publishProgramContent, recordProgramSourceSnapshot, saveExtractedEvidence, updateIngestionJob } from "./repository";
+import { createKnowledgeReview, markProgramSourcesPublished, publishProgramContent, recordProgramSourceSnapshot, saveExtractedEvidence, updateIngestionJob } from "./repository";
 import type { BrowserRenderAdapter, ChineseSummaryAdapter, ExtractedProgramField, PdfExtractionAdapter, ProgramDiscoveryInput } from "./types";
 
 export type IngestionDependencies = {
@@ -160,6 +160,7 @@ export async function ingestProgramContent(jobId: string, input: ProgramDiscover
       verifiedAt,
     });
 
+    await markProgramSourcesPublished(input.programId);
     await updateIngestionJob(jobId, "published");
     return { status: coverageStatus, fields: unique.length };
   } catch (error) {
