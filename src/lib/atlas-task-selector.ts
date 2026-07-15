@@ -32,6 +32,7 @@ function daysUntil(value?: string) {
 }
 
 function recordPriority(record: ApplicationRecord) {
+  if (record.status === "manual_review") return 2;
   if (record.status === "supplement_required") return 3;
   if (record.status !== "offer_received" && record.status !== "submitted" && record.status !== "waiting_result" && daysUntil(record.nextDeadline) <= 30) return 1;
   if (record.status === "ready_to_apply") return 2;
@@ -42,6 +43,11 @@ function recordPriority(record: ApplicationRecord) {
 }
 
 function taskCopy(record: ApplicationRecord) {
+  if (record.status === "manual_review") return {
+    title: `确认 ${record.universityName} 申请材料`,
+    action: "查看服务进度",
+    explanation: "Atlas 正在审核申请材料与基本信息；如发现缺失内容，会在这里集中提醒你补充。",
+  };
   if (record.status === "supplement_required") return {
     title: `补充 ${record.universityName} 要求的材料`,
     action: "进入补件工作区",
@@ -110,7 +116,7 @@ export function getApplicationJourneyNodes(applicationRecords: ApplicationRecord
         title: copy.title,
         stage: record.status === "offer_received" ? "Offer" : "Application",
         explanation: copy.explanation,
-        status: record.status === "submitted" || record.status === "waiting_result" ? "in_progress" : record.status === "offer_received" ? "awaiting_evidence" : record.status === "supplement_required" ? "blocked" : "ready",
+        status: record.status === "manual_review" || record.status === "submitted" || record.status === "waiting_result" ? "in_progress" : record.status === "offer_received" ? "awaiting_evidence" : record.status === "supplement_required" ? "blocked" : "ready",
         deadline: record.nextDeadline ?? "待确认",
         priority: recordPriority(record) <= 2 ? "High" : recordPriority(record) <= 4 ? "Medium" : "Low",
         whyItMatters: "该任务会直接更新学校申请进度、材料状态和下一步行动。",
