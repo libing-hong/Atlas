@@ -12,7 +12,7 @@ export type ApplicationHomeState =
   | "supplement_required"
   | "offer_received";
 
-export type RecommendationCategory = "reach" | "target" | "safer";
+export type RecommendationCategory = "reach" | "target" | "safer" | "manual_review" | "currently_not_eligible";
 
 export type ApplicationRecordStatus = "materials_in_progress" | "ready_to_apply" | "manual_review" | "submitted" | "waiting_result" | "supplement_required" | "offer_received";
 
@@ -97,6 +97,13 @@ export type SchoolRecommendation = {
     teachingFormat?: string;
     practicalProjects?: string[];
     careerDirections?: string[];
+  };
+  atlasMatch?: {
+    score: number;
+    eligibilityStatus: "eligible" | "mostly_eligible" | "needs_confirmation" | "currently_not_eligible";
+    matchedItems: string[];
+    preparationItems: string[];
+    unresolvedItems: string[];
   };
   recommendationContent: {
     summary: string;
