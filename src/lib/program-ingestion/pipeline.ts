@@ -2,7 +2,7 @@ import "server-only";
 import { discoverProgramSources, OfficialSiteSearchAdapter } from "./source-discovery";
 import { appearsJavascriptDependent, extractStaticHtml, validateProgramIdentity } from "./extractors";
 import { fetchOfficialPage } from "./source-policy";
-import { createKnowledgeReview, publishProgramContent, saveExtractedEvidence, updateIngestionJob } from "./repository";
+import { createKnowledgeReview, publishProgramContent, recordProgramSourceSnapshot, saveExtractedEvidence, updateIngestionJob } from "./repository";
 import type { BrowserRenderAdapter, ChineseSummaryAdapter, ExtractedProgramField, PdfExtractionAdapter, ProgramDiscoveryInput } from "./types";
 
 export type IngestionDependencies = {
@@ -56,12 +56,21 @@ export async function ingestProgramContent(jobId: string, input: ProgramDiscover
     await updateIngestionJob(jobId, "fetching");
     const fields: ExtractedProgramField[] = [];
     const acceptedSources: string[] = [];
+    let sourceChanged = false;
 
     for (const source of sources.slice(0, 4)) {
       try {
         if (source.type === "programme_specification_pdf" || source.url.toLowerCase().endsWith(".pdf")) {
           if (!dependencies.pdfExtractor) continue;
           const document = await dependencies.pdfExtractor.extract(source.url);
+          const snapshot = await recordProgramSourceSnapshot({
+            programId: input.programId,
+            source,
+            extractionMethod: "pdf",
+            content: document.text,
+            pageTitle: document.title,
+          });
+          sourceChanged ||= snapshot.changed;
           fields.push(...conservativePdfFields(document.text, source.url, document.title));
           acceptedSources.push(source.url);
           continue;
@@ -70,11 +79,15 @@ export async function ingestProgramContent(jobId: string, input: ProgramDiscover
         const response = await fetchOfficialPage(source.url, input.officialDomains);
         if (!response.ok) continue;
         const html = await response.text();
+        let finalHtml = html;
+        let extractionMethod: "static_html" | "browser_rendered" = "static_html";
         let extracted = extractStaticHtml(html, source.url);
         let identity = validateProgramIdentity({ html, universityName: input.universityName, programName: input.programName, intakeYear: input.intakeYear });
 
         if (appearsJavascriptDependent(html, extracted.fields.length) && dependencies.browserRenderer) {
           const rendered = await dependencies.browserRenderer.render(source.url);
+          finalHtml = rendered.html;
+          extractionMethod = "browser_rendered";
           extracted = extractStaticHtml(rendered.html, source.url);
           identity = validateProgramIdentity({ html: rendered.html, universityName: input.universityName, programName: input.programName, intakeYear: input.intakeYear });
         }
@@ -86,6 +99,15 @@ export async function ingestProgramContent(jobId: string, input: ProgramDiscover
         if (!identity.intakeMatch) {
           for (const field of extracted.fields) field.verificationStatus = "needs_review";
         }
+        const snapshot = await recordProgramSourceSnapshot({
+          programId: input.programId,
+          source,
+          extractionMethod,
+          content: finalHtml,
+          pageTitle: extracted.pageTitle,
+          httpStatus: response.status,
+        });
+        sourceChanged ||= snapshot.changed;
         fields.push(...extracted.fields);
         acceptedSources.push(source.url);
       } catch (error) {
@@ -96,6 +118,10 @@ export async function ingestProgramContent(jobId: string, input: ProgramDiscover
     await updateIngestionJob(jobId, "extracting");
     const unique = [...new Map(fields.map((field) => [`${field.field}:${field.value.toLowerCase()}`, field])).values()];
     await saveExtractedEvidence(input.programId, unique);
+    if (sourceChanged) {
+      await updateIngestionJob(jobId, "needs_review", "Official source changed; review required before publishing");
+      return { status: "manual_review" as const, fields: unique.length };
+    }
     if (unique.length < 4 || !acceptedSources.length) {
       await createKnowledgeReview(input.programId, "提取字段不足，不能自动发布专业内容", { fieldCount: unique.length, acceptedSources });
       await updateIngestionJob(jobId, "needs_review", "Insufficient verified fields");
@@ -104,8 +130,14 @@ export async function ingestProgramContent(jobId: string, input: ProgramDiscover
 
     await updateIngestionJob(jobId, "validating");
     const summary = await dependencies.summarizer.summarize({ programName: input.programName, fields: unique });
-    const coreModules = unique.filter((field) => field.field === "core_module").map(moduleFromField).filter(Boolean);
-    const optionalModules = unique.filter((field) => field.field === "optional_module").map(moduleFromField).filter(Boolean);
+    const coreModules = unique.filter((field) => field.field === "core_module").flatMap((field) => {
+      const module = moduleFromField(field);
+      return module ? [module] : [];
+    });
+    const optionalModules = unique.filter((field) => field.field === "optional_module").flatMap((field) => {
+      const module = moduleFromField(field);
+      return module ? [module] : [];
+    });
     const verifiedFields = unique.filter((field) => field.verificationStatus === "verified");
     const coverageStatus = verifiedFields.length >= 8 && coreModules.length >= 3 ? "verified" as const : "partially_verified" as const;
     const verifiedAt = new Date().toISOString();
