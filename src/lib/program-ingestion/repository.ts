@@ -100,3 +100,60 @@ export async function createKnowledgeReview(programId: string, summary: string, 
     source_payload: sourcePayload,
   });
 }
+
+
+export async function publishProgramContent(input: {
+  programId: string;
+  introduction: string;
+  learningFocus: string[];
+  learningOutcomes: string[];
+  practicalComponents: string[];
+  careerDirections: string[];
+  targetStudents?: string;
+  durationOptions: Array<{ label: string; months?: number; description?: string }>;
+  accreditation: string[];
+  teachingLocation?: string;
+  teachingFormat?: string;
+  officialCurriculumUrl?: string;
+  modules: Array<{ code?: string; name: string; credits?: number; type: "core" | "optional" | "project" | "internship" | "dissertation"; sourceUrl: string }>;
+  coverageStatus: "verified" | "partially_verified";
+  verifiedAt: string;
+}) {
+  const client = adminClient();
+  if (!client) return { published: false, reason: "Knowledge database is not configured" };
+  const profileResult = await client.from("program_content_profiles").upsert({
+    program_id: input.programId,
+    introduction: input.introduction,
+    target_students: input.targetStudents ?? null,
+    learning_focus: input.learningFocus,
+    learning_outcomes: input.learningOutcomes,
+    practical_components: input.practicalComponents,
+    career_directions: input.careerDirections,
+    duration_options: input.durationOptions,
+    accreditation: input.accreditation,
+    teaching_location: input.teachingLocation ?? null,
+    teaching_format: input.teachingFormat ?? null,
+    official_curriculum_url: input.officialCurriculumUrl ?? null,
+    source_retrieved_at: input.verifiedAt,
+    last_verified_at: input.verifiedAt,
+    verification_status: input.coverageStatus === "verified" ? "verified_official" : "partially_verified",
+    coverage_status: input.coverageStatus,
+    updated_at: input.verifiedAt,
+  });
+  if (profileResult.error) throw profileResult.error;
+  await client.from("program_course_modules").delete().eq("program_id", input.programId);
+  if (input.modules.length) {
+    const moduleResult = await client.from("program_course_modules").insert(input.modules.map((module, index) => ({
+      program_id: input.programId,
+      code: module.code ?? null,
+      name: module.name,
+      credits: module.credits ?? null,
+      module_type: module.type,
+      display_order: index,
+      source_url: module.sourceUrl,
+      last_verified_at: input.verifiedAt,
+    })));
+    if (moduleResult.error) throw moduleResult.error;
+  }
+  return { published: true };
+}
