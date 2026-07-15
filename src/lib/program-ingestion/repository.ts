@@ -229,3 +229,35 @@ export async function enqueueDueProgramRefreshes(limit = 25, staleAfterDays = 30
   }
   return { queued };
 }
+
+
+export async function claimNextProgramIngestionJob() {
+  const client = adminClient();
+  if (!client) return undefined;
+  const claimed = await client.rpc("claim_program_ingestion_job");
+  if (claimed.error) throw claimed.error;
+  const row = claimed.data?.[0];
+  return row ? { id: row.job_id as string, programId: row.program_id as string } : undefined;
+}
+
+export async function getProgramDiscoveryInput(programId: string): Promise<import("./types").ProgramDiscoveryInput | undefined> {
+  const client = adminClient();
+  if (!client) return undefined;
+  const result = await client.from("programs")
+    .select("id,canonical_name,intake_year,official_program_url,universities(canonical_name)")
+    .eq("id", programId)
+    .maybeSingle();
+  if (result.error) throw result.error;
+  if (!result.data) return undefined;
+  const officialProgramUrl = result.data.official_program_url;
+  const university = Array.isArray(result.data.universities) ? result.data.universities[0] : result.data.universities;
+  return {
+    programId: result.data.id,
+    universityName: university?.canonical_name ?? "",
+    programName: result.data.canonical_name,
+    degreeType: result.data.canonical_name.match(/\b(?:MSc|MA|MBA|MRes|LLM|BSc|BA|PhD)\b/i)?.[0] ?? "",
+    intakeYear: result.data.intake_year,
+    officialDomains: [new URL(officialProgramUrl).hostname],
+    registeredUrls: [officialProgramUrl],
+  };
+}
