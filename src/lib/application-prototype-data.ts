@@ -42,6 +42,7 @@ export type ApplicationMaterial = {
 
 export type ApplicationRecord = {
   id: string;
+  planningRunId: string;
   schoolRecommendationId: string;
   universityName: string;
   programName: string;
@@ -142,10 +143,11 @@ export const commonMaterials = [
   { id: "cv", name: "基础 CV", note: "学校定制版本仍可能需要调整", reusableFor: ["all"] },
 ];
 
-export function createApplicationRecord(school: SchoolRecommendation): ApplicationRecord {
+export function createApplicationRecord(school: SchoolRecommendation, planningRunId = "legacy"): ApplicationRecord {
   const missingMaterials = school.requirements.filter((item) => !["本科成绩单", "英语语言成绩"].includes(item));
   return {
-    id: `app-${school.id}`,
+    id: `app-${planningRunId}-${school.id}`,
+    planningRunId,
     schoolRecommendationId: school.id,
     universityName: school.universityName,
     programName: school.programName,
