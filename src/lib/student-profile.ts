@@ -7,15 +7,9 @@ export type LanguageTest = {
   speaking?: number;
   testDate?: string;
 };
-
-export type WorkExperience = {
-  role: string;
-  industry?: string;
-  months?: number;
-  description?: string;
-};
-
+export type WorkExperience = { role: string; industry?: string; months?: number; description?: string };
 export type StudentProfile = {
+  name: string;
   degreeLevel: string;
   institutionNameZh?: string;
   institutionNameEn: string;
@@ -40,51 +34,63 @@ export type StudentProfile = {
 };
 
 const key = "atlas.student-profile.v2";
-
-export const defaultStudentProfile: StudentProfile = {
+export const emptyStudentProfile: StudentProfile = {
+  name: "",
   degreeLevel: "本科",
-  institutionNameZh: "深圳大学",
-  institutionNameEn: "Shenzhen University",
+  institutionNameZh: "",
+  institutionNameEn: "",
   institutionCountry: "中国",
-  graduationDate: { year: 2026, month: 6 },
-  currentMajor: "市场营销",
-  averageScore: 78,
-  gradingSystem: "百分制",
-  languageTests: [{ type: "IELTS Academic", overall: 6.5, listening: 6.5, reading: 7, writing: 5.5, speaking: 6.5, testDate: "2026-03-18" }],
-  workExperiences: [{ role: "品牌出海与欧洲市场拓展", industry: "跨境贸易", months: 12 }],
+  graduationDate: { year: new Date().getFullYear(), month: 6 },
+  currentMajor: "",
+  languageTests: [],
+  workExperiences: [],
   internships: [],
-  targetCountries: ["英国", "法国"],
-  targetSubjects: ["市场营销", "国际商务"],
-  targetIntake: { year: 2027, term: "fall" },
-  budgetMin: 20000,
-  budgetMax: 35000,
+  targetCountries: [],
+  targetSubjects: [],
+  targetIntake: { year: new Date().getFullYear() + 1, term: "fall" },
   preferredCities: [],
-  acceptsCrossDiscipline: true,
+  acceptsCrossDiscipline: false,
   acceptsPreMaster: false,
-  acceptsLanguageCourse: true
+  acceptsLanguageCourse: true,
 };
+export const defaultStudentProfile = emptyStudentProfile;
 
 export function readStudentProfile(): StudentProfile {
-  if (typeof window === "undefined") return defaultStudentProfile;
+  if (typeof window === "undefined") return emptyStudentProfile;
   try {
-    const saved = JSON.parse(window.localStorage.getItem(key) ?? "{}") as Partial<StudentProfile>;
+    const saved = JSON.parse(window.localStorage.getItem(key) ?? "null") as Partial<StudentProfile> | null;
+    if (!saved) return emptyStudentProfile;
     return {
-      ...defaultStudentProfile,
+      ...emptyStudentProfile,
       ...saved,
-      graduationDate: { ...defaultStudentProfile.graduationDate, ...saved.graduationDate },
-      targetIntake: { ...defaultStudentProfile.targetIntake, ...saved.targetIntake },
-      languageTests: saved.languageTests ?? defaultStudentProfile.languageTests,
-      workExperiences: saved.workExperiences ?? defaultStudentProfile.workExperiences,
-      internships: saved.internships ?? defaultStudentProfile.internships
+      graduationDate: { ...emptyStudentProfile.graduationDate, ...saved.graduationDate },
+      targetIntake: { ...emptyStudentProfile.targetIntake, ...saved.targetIntake },
+      languageTests: saved.languageTests ?? [],
+      workExperiences: saved.workExperiences ?? [],
+      internships: saved.internships ?? [],
+      targetCountries: saved.targetCountries ?? [],
+      targetSubjects: saved.targetSubjects ?? [],
     };
-  } catch {
-    return defaultStudentProfile;
-  }
+  } catch { return emptyStudentProfile; }
 }
-
+export function validateStudentProfile(profile: StudentProfile) {
+  const missing = [
+    !profile.name && "姓名",
+    !profile.institutionNameZh && "本科院校中文名",
+    !profile.institutionNameEn && "本科院校英文名",
+    !profile.currentMajor && "本科专业",
+    !profile.targetCountries.length && "目标国家",
+    !profile.targetSubjects.length && "目标专业",
+    !profile.budgetMax && "学费预算",
+  ].filter(Boolean);
+  if (missing.length) throw new Error(`请填写：${missing.join("、")}`);
+  if (profile.averageScore !== undefined && (profile.averageScore < 0 || profile.averageScore > 100)) throw new Error("平均分应在 0–100 之间");
+  if (profile.gpa !== undefined && (profile.gpa < 0 || profile.gpa > 5)) throw new Error("GPA 数值不正确");
+  return profile;
+}
 export function writeStudentProfile(profile: StudentProfile) {
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(key, JSON.stringify(profile));
-    window.dispatchEvent(new Event("atlas-student-profile-change"));
-  }
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify(profile));
+  window.dispatchEvent(new Event("atlas-student-profile-change"));
+  window.dispatchEvent(new Event("atlas-planning-state-change"));
 }
