@@ -45,7 +45,7 @@ export async function getProgramContentFromStore(programId: string): Promise<Pro
     sourceRetrievedAt: profile.source_retrieved_at,
     lastVerifiedAt: profile.last_verified_at,
     verificationStatus: profile.verification_status,
-    coverageStatus: profile.coverage_status === "source_unavailable" ? "not_available" : profile.coverage_status,
+    coverageStatus: profile.coverage_status as ProgramContentProfile["coverageStatus"],
   };
 }
 
