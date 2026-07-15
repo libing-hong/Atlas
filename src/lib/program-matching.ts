@@ -47,11 +47,19 @@ function normalized(value: string) {
 }
 
 function subjectRelated(student: StudentProfile, school: SchoolRecommendation) {
-  const haystack = normalized([student.currentMajor, ...student.targetSubjects].join(" "));
+  const background = normalized([student.currentMajor, ...student.targetSubjects].join(" "));
   const program = normalized(school.programName);
-  const marketing = ["marketing", "市场营销", "品牌", "digital"].some((token) => haystack.includes(normalized(token)) && program.includes(normalized(token)));
-  const business = ["business", "商务", "管理", "management"].some((token) => haystack.includes(normalized(token)) && program.includes(normalized(token)));
-  return marketing || business;
+  const groups = [
+    ["marketing", "市场营销", "品牌", "digital", "消费者"],
+    ["business", "商务", "管理", "management", "国际商务"],
+    ["finance", "金融", "会计", "经济", "banking", "investment"],
+    ["computer", "计算机", "软件", "data", "数据", "analytics", "人工智能", "ai"],
+    ["media", "传媒", "传播", "journalism"],
+  ];
+  return groups.some((tokens) =>
+    tokens.some((token) => background.includes(normalized(token)))
+    && tokens.some((token) => program.includes(normalized(token))),
+  );
 }
 
 export function buildPublicRequirementSet(school: SchoolRecommendation): ProgramRequirementSet {
@@ -162,9 +170,14 @@ export function calculateProgramMatch(
   ];
 
   const focus = content?.learningFocus.slice(0, 3).join("、");
+  const backgroundFacts = [
+    `${student.institutionNameZh || student.institutionNameEn}的${student.currentMajor}背景`,
+    student.averageScore !== undefined ? `确认均分 ${student.averageScore}%` : student.gpa !== undefined ? `GPA ${student.gpa}` : "学术成绩仍待补充",
+    student.languageTests[0]?.overall !== undefined ? `${student.languageTests[0].type} ${student.languageTests[0].overall}` : "尚未提供语言成绩",
+  ].join("、");
   const reason = finalStatus === "currently_not_eligible"
-    ? `该项目暂未进入主要推荐：${eligibility.hardFailures.join("；")}。你仍可保留查看，但应先调整目标或补充资料。`
-    : `你已确认的${student.currentMajor}背景与该项目方向${related ? "存在具体关联" : "需要进一步说明关联"}。${focus ? `项目重点包括${focus}，可与目前目标方向进行对照。` : "该项目课程公开信息仍在核实。"}当前 Atlas 方案匹配度为 ${score}，用于排序申请方案，不代表学校录取概率。`;
+    ? `基于${backgroundFacts}，该项目暂未进入主要推荐：${eligibility.hardFailures.join("；")}。建议先调整目标或补充资料。`
+    : `基于${backgroundFacts}，你的专业方向与该项目${related ? "存在具体关联" : "需要进一步说明关联"}。${focus ? `项目公开方向包括${focus}。` : "该项目课程公开信息仍在核实。"}该排序用于规划，不代表学校录取概率。`;
 
   return {
     programId: school.id,
