@@ -6,6 +6,7 @@ import { Card } from "@/components/Card";
 import { ApplicationMode, getMaterialsForApplication, readApplicationMode, readApplicationRecords, updateApplicationRecord } from "@/lib/application-store";
 import { AdmissionRequirement, ApplicationMaterial, ApplicationRecord, getAdmissionRequirements, RequirementStatus, SchoolRecommendation } from "@/lib/application-prototype-data";
 import { getAdmissionKnowledge } from "@/lib/admission-knowledge";
+import { readActivePlanningRun } from "@/lib/planning-store";
 import { InstitutionEligibilityPanel, InstitutionVerification } from "./InstitutionEligibilityPanel";
 
 const requirementLabels: Record<RequirementStatus, string> = { meets: "已达标", mostly_meets: "基本符合", needs_confirmation: "需要确认", gap_detected: "尚未达标", unknown: "信息不足" };
@@ -18,7 +19,7 @@ type VerificationState = "idle" | "loading" | "success" | "error";
 
 export function MaterialsWorkspaceClient({ school, applicationId }: { school: SchoolRecommendation; applicationId: string }) {
   const record = useMemo<ApplicationRecord>(() => readApplicationRecords().find((item) => item.id === applicationId) ?? {
-    id: applicationId, schoolRecommendationId: school.id, universityName: school.universityName, programName: school.programName,
+    id: applicationId, planningRunId: readActivePlanningRun()?.id ?? "legacy", schoolRecommendationId: school.id, universityName: school.universityName, programName: school.programName,
     country: school.country, intake: school.intake, status: "materials_in_progress", detectedMaterialCount: school.materialsReady, preparedMaterials: school.materialsReady,
     totalMaterials: school.materialsTotal, missingMaterials: [], applicationProgress: Math.round((school.materialsReady / school.materialsTotal) * 45), nextAction: "准备申请材料", serviceType: "none",
   }, [applicationId, school]);
