@@ -8,7 +8,6 @@ import { DashboardShell } from "@/components/PageShell";
 import { ApplicationRecord, recommendations } from "@/lib/application-prototype-data";
 import {
   ApplicationMode,
-  ApplicationRecord,
   createApplicationSubmissionOrder,
   createFixedServiceOrder,
   getApplicationStateSnapshot,
