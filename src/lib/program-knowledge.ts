@@ -1,4 +1,4 @@
-export type KnowledgeCoverageStatus = "verified" | "partially_verified" | "fetching" | "manual_review" | "not_available";
+export type KnowledgeCoverageStatus = "verified" | "partially_verified" | "fetching" | "manual_review" | "source_unavailable" | "not_available";
 export type ProgramVerificationStatus = "verified_official" | "partially_verified" | "pending_review" | "outdated";
 export type CourseModuleType = "core" | "optional" | "project" | "internship" | "dissertation";
 
@@ -142,7 +142,8 @@ export function programKnowledgeStatusCopy(status: KnowledgeCoverageStatus) {
   if (status === "verified") return "官方信息已核实";
   if (status === "partially_verified") return "官方信息已部分核实";
   if (status === "fetching") return "Atlas 正在核实最新官方信息";
-  if (status === "manual_review") return "等待人工复核";
+  if (status === "manual_review") return "该专业需要进一步人工确认";
+  if (status === "source_unavailable" || status === "not_available") return "暂未获得可靠的官方公开信息";
   return "暂未获得可靠公开信息";
 }
 
