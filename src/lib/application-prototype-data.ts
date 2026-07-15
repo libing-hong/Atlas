@@ -14,7 +14,7 @@ export type ApplicationHomeState =
 
 export type RecommendationCategory = "reach" | "target" | "safer";
 
-export type ApplicationRecordStatus = "materials_in_progress" | "ready_to_apply" | "submitted" | "waiting_result" | "supplement_required" | "offer_received";
+export type ApplicationRecordStatus = "materials_in_progress" | "ready_to_apply" | "manual_review" | "submitted" | "waiting_result" | "supplement_required" | "offer_received";
 
 export type MaterialPreparationStatus = "prepared" | "uploading" | "processing" | "needs_confirmation" | "review_required" | "not_detected" | "not_required" | "rejected";
 
