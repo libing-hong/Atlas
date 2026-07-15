@@ -286,6 +286,7 @@ create table public.program_sources (
   robots_checked_at timestamptz,
   last_retrieved_at timestamptz,
   content_hash text,
+  verified_content_hash text,
   status text not null default 'active' check (status in ('active', 'blocked', 'login_required', 'invalid', 'outdated')),
   unique (program_id, source_url)
 );
