@@ -38,6 +38,14 @@ function languageScore(profile: StudentProfile) {
   if (overall >= 6) return 8;
   return 4;
 }
+function budgetReadinessScore(profile: StudentProfile) {
+  const budget = profile.budgetMax ?? 0;
+  if (budget >= 45000) return 8;
+  if (budget >= 35000) return 6;
+  if (budget >= 25000) return 4;
+  if (budget > 0) return 2;
+  return 0;
+}
 function calculateCountryFit(profile: StudentProfile, country: string) {
   const targeted = profile.targetCountries.includes(country);
   const language = profile.languageTests[0]?.overall;
@@ -54,8 +62,9 @@ export function buildPlanningReport(profile: StudentProfile, portfolio: Portfoli
   const score = Math.max(20, Math.min(95,
     institutionScore(profile) + academicScore(profile) + languageScore(profile)
     + Math.min(12, experienceCount * 4)
-    + (profile.targetCountries.length ? 7 : 0)
-    + (profile.targetSubjects.length ? 7 : 0),
+    + budgetReadinessScore(profile)
+    + Math.min(7, profile.targetCountries.length * 3)
+    + Math.min(7, profile.targetSubjects.length * 3),
   ));
   const countries = [...new Set(profile.targetCountries)];
   const fits = countries.map((country) => ({
