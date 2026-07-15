@@ -192,7 +192,7 @@ create table public.program_content_profiles (
   source_retrieved_at timestamptz not null,
   last_verified_at timestamptz not null,
   verification_status text not null check (verification_status in ('verified_official', 'partially_verified', 'pending_review', 'outdated')),
-  coverage_status text not null check (coverage_status in ('verified', 'partially_verified', 'fetching', 'manual_review', 'not_available')),
+  coverage_status text not null check (coverage_status in ('verified', 'partially_verified', 'fetching', 'manual_review', 'source_unavailable', 'not_available')),
   updated_at timestamptz not null default now()
 );
 
@@ -271,3 +271,73 @@ alter table private_institution_admission_rules enable row level security;
 alter table public.knowledge_review_queue enable row level security;
 
 comment on table private_institution_admission_rules is 'Confidential partner admission rules. No browser-facing select policy is permitted.';
+
+
+-- Official-source ingestion and field-level provenance.
+create table public.program_sources (
+  id uuid primary key default gen_random_uuid(),
+  program_id text not null references public.programs(id) on delete cascade,
+  source_url text not null,
+  source_type text not null check (source_type in ('program_page', 'curriculum_page', 'module_catalogue', 'programme_specification_pdf', 'careers_page')),
+  official_domain text not null,
+  discovery_method text not null check (discovery_method in ('registered', 'sitemap', 'official_search', 'linked_document')),
+  extraction_method text check (extraction_method in ('json_ld', 'static_html', 'browser_rendered', 'pdf', 'manual')),
+  confidence numeric(4, 3) not null check (confidence between 0 and 1),
+  robots_checked_at timestamptz,
+  last_retrieved_at timestamptz,
+  content_hash text,
+  status text not null default 'active' check (status in ('active', 'blocked', 'login_required', 'invalid', 'outdated')),
+  unique (program_id, source_url)
+);
+
+create table public.program_source_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  program_source_id uuid not null references public.program_sources(id) on delete cascade,
+  content_hash text not null,
+  storage_reference text,
+  page_title text,
+  retrieved_at timestamptz not null,
+  http_status int,
+  change_status text not null default 'unchanged' check (change_status in ('new', 'unchanged', 'changed', 'removed')),
+  unique (program_source_id, content_hash)
+);
+
+create table public.extracted_program_fields (
+  id uuid primary key default gen_random_uuid(),
+  program_id text not null references public.programs(id) on delete cascade,
+  field_name text not null check (field_name in ('introduction', 'learning_focus', 'core_module', 'optional_module', 'learning_outcome', 'practical_component', 'career_direction', 'target_students', 'duration', 'teaching_location', 'teaching_format', 'accreditation')),
+  field_value text not null,
+  source_url text not null,
+  source_page_title text not null,
+  source_text text,
+  retrieved_at timestamptz not null,
+  confidence numeric(4, 3) not null check (confidence between 0 and 1),
+  verification_status text not null check (verification_status in ('verified', 'needs_review', 'outdated')),
+  published_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table public.program_ingestion_jobs (
+  id uuid primary key default gen_random_uuid(),
+  program_id text not null references public.programs(id) on delete cascade,
+  status text not null default 'queued' check (status in ('queued', 'discovering', 'fetching', 'extracting', 'validating', 'needs_review', 'published', 'failed')),
+  trigger text not null check (trigger in ('preload', 'on_demand', 'scheduled_refresh', 'manual_retry')),
+  priority int not null default 50 check (priority between 0 and 100),
+  attempts int not null default 0,
+  last_error text,
+  locked_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index idx_program_sources_program on public.program_sources(program_id, status);
+create index idx_program_fields_program on public.extracted_program_fields(program_id, field_name, verification_status);
+create index idx_ingestion_jobs_queue on public.program_ingestion_jobs(status, priority desc, created_at);
+
+alter table public.program_sources enable row level security;
+alter table public.program_source_snapshots enable row level security;
+alter table public.extracted_program_fields enable row level security;
+alter table public.program_ingestion_jobs enable row level security;
+
+comment on table public.extracted_program_fields is 'Field-level official evidence. Source text remains internal and must not be returned by public APIs.';
+comment on table public.program_source_snapshots is 'Internal change-detection metadata; raw snapshots belong in private object storage.';
