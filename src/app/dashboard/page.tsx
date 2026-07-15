@@ -12,13 +12,16 @@ import { DevelopmentJourneyRepository, DevelopmentUserContext } from "@/lib/visu
 import { getApplicationJourneyNodes, getAtlasPrimaryTask, getJourneyStagesForApplicationRecords } from "@/lib/atlas-task-selector";
 import { getApplicationStateSnapshot, getServerApplicationStateSnapshot, subscribeToApplicationState } from "@/lib/application-store";
 import { ApplicationRecord } from "@/lib/application-prototype-data";
+import { readActivePlanningRun } from "@/lib/planning-store";
 
 export default function DashboardPage() {
   const { text, t } = useLanguage();
   const context = DevelopmentUserContext.getDashboardContext();
   const snapshot = useSyncExternalStore(subscribeToApplicationState, getApplicationStateSnapshot, getServerApplicationStateSnapshot);
   const applicationState = snapshot === "server" ? { records: [] as ApplicationRecord[], selection: [] as string[], workspacePurchased: false } : JSON.parse(snapshot) as { records: ApplicationRecord[]; selection: string[]; workspacePurchased: boolean };
-  const applicationRecords = applicationState.records;
+  const run = readActivePlanningRun();
+  const profile = run?.profile;
+  const applicationRecords = run ? applicationState.records.filter((record) => record.planningRunId === run.id) : [];
   const selectedSchoolIds = applicationState.selection;
   const stages = getJourneyStagesForApplicationRecords(applicationRecords);
   const nodes = getApplicationJourneyNodes(applicationRecords, selectedSchoolIds);
@@ -28,6 +31,8 @@ export default function DashboardPage() {
   const currentIssue = nodes.find((node) => node.status === "blocked");
   const primaryTask = getAtlasPrimaryTask({ applicationRecords, selectedSchoolIds, workspacePurchased: applicationState.workspacePurchased, journeyNodes: nodes });
   const preparedForTask = primaryTask.atlasPreparedItems ?? preparedItems.slice(0, 4).map((item) => text(item.title));
+  const primaryTaskHref = run && primaryTask.id === "confirm-application-schools" ? `/applications/recommendations?runId=${encodeURIComponent(run.id)}` : primaryTask.actionHref;
+  const applicationsHref = run ? `/applications?runId=${encodeURIComponent(run.id)}` : "/applications";
 
   return (
     <DashboardShell>
@@ -38,7 +43,7 @@ export default function DashboardPage() {
               <T en="My Atlas" zh="我的 Atlas" />
             </p>
             <h1 className="mt-3 font-editorial text-5xl font-semibold leading-none text-[#2f2924] md:text-6xl">
-              <T en={`Good morning, ${context.studentName}`} zh={`${text(context.studentName)}，早上好`} />
+              <T en={`Good morning, ${context.studentName}`} zh={`${profile?.name || text(context.studentName)}，早上好`} />
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-7 text-[#6f6256]">
               <T
@@ -51,10 +56,10 @@ export default function DashboardPage() {
           <div className="grid gap-3 rounded-[22px] bg-[#f7f0e8] p-4 text-sm text-[#5d5148] sm:grid-cols-2 xl:w-[420px]">
             <Fact label={{ en: "Application", zh: "申请" }} value={applicationRecords[0] ? `${applicationRecords[0].universityName} · ${applicationRecords[0].programName}` : "学校申请规划"} />
             <Fact label={{ en: "Current stage", zh: "当前阶段" }} value={text(currentStage.name)} />
-            <Fact label={{ en: "Destination", zh: "目的地" }} value={applicationRecords[0]?.country ?? (applicationState.selection.length ? "英国 / 法国" : text(context.destination))} />
-            <Fact label={{ en: "Intake", zh: "入学时间" }} value={text(context.intakeDate)} />
-            <Fact label={{ en: "School", zh: "学校" }} value={text(context.school)} />
-            <Fact label={{ en: "Programme", zh: "项目" }} value={text(context.programme)} />
+            <Fact label={{ en: "Destination", zh: "目的地" }} value={applicationRecords[0]?.country ?? profile?.targetCountries.join(" / ") ?? text(context.destination)} />
+            <Fact label={{ en: "Intake", zh: "入学时间" }} value={profile ? `${profile.targetIntake.year} ${profile.targetIntake.term === "spring" ? "春季" : profile.targetIntake.term === "summer" ? "夏季" : "秋季"}` : text(context.intakeDate)} />
+            <Fact label={{ en: "School", zh: "学校" }} value={profile?.institutionNameZh || profile?.institutionNameEn || text(context.school)} />
+            <Fact label={{ en: "Programme", zh: "项目" }} value={profile?.targetSubjects.join("、") || text(context.programme)} />
           </div>
         </div>
       </section>
@@ -95,7 +100,7 @@ export default function DashboardPage() {
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Link
-              href={primaryTask.actionHref}
+              href={primaryTaskHref}
               className="inline-flex items-center justify-center gap-2 rounded-full bg-[#2f2924] px-6 py-4 text-sm font-medium text-[#fffaf3]"
             >
               {primaryTask.actionLabel}
@@ -137,7 +142,7 @@ export default function DashboardPage() {
               <h2 className="mt-2 font-editorial text-3xl font-semibold text-[#2f2924]">我的申请</h2>
               <div className="mt-3 flex flex-wrap gap-4 text-sm text-[#5d5148]"><span>已选择：{selectedSchoolIds.length || applicationRecords.length} 所</span><span>材料准备中：{applicationRecords.length} 所</span><span>已递交：{applicationRecords.filter((record) => record.status === "submitted").length} 所</span></div>
             </div>
-            <Link href="/applications" className="inline-flex items-center justify-center gap-2 rounded-full border border-[#d8ccbe] px-5 py-3 text-sm font-medium text-[#4a3d34]">进入申请中心 <ArrowRight size={16} /></Link>
+            <Link href={applicationsHref} className="inline-flex items-center justify-center gap-2 rounded-full border border-[#d8ccbe] px-5 py-3 text-sm font-medium text-[#4a3d34]">进入申请中心 <ArrowRight size={16} /></Link>
           </div>
         </Card>
       </section>
