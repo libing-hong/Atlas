@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   description: "集中管理申请学校、材料、截止日期和下一步事项。",
 };
 
-export default function ApplicationsPage() {
-  return <ApplicationHomeClient />;
+export default async function ApplicationsPage({ searchParams }: { searchParams: Promise<{ runId?: string }> }) {
+  const { runId } = await searchParams;
+  return <ApplicationHomeClient runId={runId} />;
 }
