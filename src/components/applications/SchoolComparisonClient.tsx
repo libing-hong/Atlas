@@ -9,39 +9,40 @@ import { getAdmissionRequirements, recommendations, SchoolRecommendation } from 
 import { readApplicationSelection, writeApplicationSelection } from "@/lib/application-store";
 import { calculateProgramMatch } from "@/lib/program-matching";
 import { getProgramContent } from "@/lib/program-knowledge";
-import { readStudentProfile, StudentProfile } from "@/lib/student-profile";
+import { emptyStudentProfile, StudentProfile } from "@/lib/student-profile";
+import { readActivePlanningRun, readPlanningRun, readRunComparisonSelection } from "@/lib/planning-store";
 
-const selectionKey = "atlas.school-comparison.selection.v1";
-const resultKey = "atlas.school-comparison.result.v1";
 
 type CompareStatus = "ready" | "loading" | "error";
 type PublicVerification = { completed?: Record<string, boolean>; average?: number; result?: "accepted" | "not_found" | "needs_confirmation" };
 
-export function SchoolComparisonClient() {
+export function SchoolComparisonClient({ runId: requestedRunId }: { runId?: string }) {
   const router = useRouter();
   const [ids, setIds] = useState<string[]>([]);
   const [status, setStatus] = useState<CompareStatus>("loading");
   const [message, setMessage] = useState("");
-  const profile = useMemo(() => readStudentProfile(), []);
+  const run = useMemo(() => requestedRunId ? readPlanningRun(requestedRunId) : readActivePlanningRun(), [requestedRunId]);
+  const runId = run?.id ?? requestedRunId ?? "";
+  const profile = run?.profile ?? emptyStudentProfile;
   const schools = useMemo(() => ids.map((id) => recommendations.find((school) => school.id === id)).filter((school): school is SchoolRecommendation => Boolean(school)), [ids]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
-        const saved = JSON.parse(window.localStorage.getItem(selectionKey) ?? "[]") as string[];
+        const saved = readRunComparisonSelection(runId);
         const valid = saved.filter((id) => recommendations.some((school) => school.id === id)).slice(0, 3);
         setIds(valid);
         setStatus(valid.length === 3 ? "ready" : "error");
       } catch { setStatus("error"); }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [runId]);
 
   function regenerate() {
     setStatus("loading"); setMessage("");
     window.setTimeout(() => {
       try {
-        const saved = JSON.parse(window.localStorage.getItem(selectionKey) ?? "[]") as string[];
+        const saved = readRunComparisonSelection(runId);
         const valid = saved.filter((id) => recommendations.some((school) => school.id === id)).slice(0, 3);
         setIds(valid); setStatus(valid.length === 3 ? "ready" : "error");
       } catch { setStatus("error"); }
@@ -49,17 +50,18 @@ export function SchoolComparisonClient() {
   }
 
   function saveResult() {
-    window.localStorage.setItem(resultKey, JSON.stringify({ schoolIds: ids, savedAt: new Date().toISOString() }));
+    window.localStorage.setItem(`atlas.school-comparison.result.v2.${runId}`, JSON.stringify({ planningRunId: runId, schoolIds: ids, savedAt: new Date().toISOString() }));
     setMessage("对比结果已保存。刷新或返回后仍可继续查看。");
   }
 
   function addToPlan() {
-    writeApplicationSelection([...new Set([...readApplicationSelection(), ...ids])]);
+    writeApplicationSelection([...new Set([...readApplicationSelection(runId), ...ids])], runId);
     setMessage("3 所学校已加入我的申请计划。");
   }
 
+  if (!run) return <DashboardShell><div className="mx-auto max-w-xl rounded-[24px] border border-[#e7d0c7] bg-[#fffaf3] p-7 text-center"><h1 className="font-editorial text-4xl font-semibold">没有找到本次申请规划。</h1><Link href="/planner" className="mt-6 inline-flex rounded-full bg-[#2f2924] px-5 py-3 text-sm text-white">重新开始免费规划</Link></div></DashboardShell>;
   if (status === "loading") return <DashboardShell><div className="grid min-h-[55vh] place-items-center"><div className="text-center text-sm text-[#6f6256]"><LoaderCircle className="mx-auto mb-3 animate-spin" size={24} />正在生成学校对比……</div></div></DashboardShell>;
-  if (status === "error" || schools.length !== 3) return <DashboardShell><div className="mx-auto max-w-xl rounded-[24px] border border-[#e7d0c7] bg-[#fffaf3] p-7 text-center"><h1 className="font-editorial text-4xl font-semibold text-[#2f2924]">暂时无法生成对比</h1><p className="mt-3 text-sm leading-6 text-[#8a5f54]">没有找到完整的 3 所学校选择。请返回重新选择，或尝试重新生成。</p><div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row"><button type="button" onClick={regenerate} className="inline-flex items-center justify-center gap-2 rounded-full bg-[#2f2924] px-5 py-3 text-sm text-white"><RefreshCw size={15} />重新生成对比</button><Link href="/applications/recommendations" className="rounded-full border border-[#d8ccbe] px-5 py-3 text-sm text-[#4a3d34]">返回选择学校</Link></div></div></DashboardShell>;
+  if (status === "error" || schools.length !== 3) return <DashboardShell><div className="mx-auto max-w-xl rounded-[24px] border border-[#e7d0c7] bg-[#fffaf3] p-7 text-center"><h1 className="font-editorial text-4xl font-semibold text-[#2f2924]">暂时无法生成对比</h1><p className="mt-3 text-sm leading-6 text-[#8a5f54]">没有找到完整的 3 所学校选择。请返回重新选择，或尝试重新生成。</p><div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row"><button type="button" onClick={regenerate} className="inline-flex items-center justify-center gap-2 rounded-full bg-[#2f2924] px-5 py-3 text-sm text-white"><RefreshCw size={15} />重新生成对比</button><Link href={`/applications/recommendations?runId=${encodeURIComponent(runId)}`} className="rounded-full border border-[#d8ccbe] px-5 py-3 text-sm text-[#4a3d34]">返回选择学校</Link></div></div></DashboardShell>;
 
   return <DashboardShell>
     <div className="space-y-6 pb-8">
@@ -76,7 +78,7 @@ export function SchoolComparisonClient() {
       </div>
 
       {message ? <p role="status" className="rounded-2xl border border-[#c9dbc5] bg-[#eef4ed] p-4 text-sm text-[#4f6d54]">{message}</p> : null}
-      <div className="flex flex-col justify-between gap-3 rounded-[22px] border border-[#d8ccbe] bg-[#fffaf3] p-4 sm:flex-row sm:items-center"><button type="button" onClick={() => router.push("/applications/recommendations")} className="rounded-full border border-[#d8ccbe] px-5 py-3 text-sm text-[#4a3d34]">返回修改对比</button><div className="flex flex-col gap-3 sm:flex-row"><button type="button" onClick={addToPlan} className="rounded-full border border-[#789276] px-5 py-3 text-sm font-medium text-[#4f6d54]">加入我的申请计划</button><button type="button" onClick={saveResult} className="inline-flex items-center justify-center gap-2 rounded-full bg-[#2f2924] px-5 py-3 text-sm font-medium text-white"><Check size={16} />保存对比结果</button></div></div>
+      <div className="flex flex-col justify-between gap-3 rounded-[22px] border border-[#d8ccbe] bg-[#fffaf3] p-4 sm:flex-row sm:items-center"><button type="button" onClick={() => router.push(`/applications/recommendations?runId=${encodeURIComponent(runId)}`)} className="rounded-full border border-[#d8ccbe] px-5 py-3 text-sm text-[#4a3d34]">返回修改对比</button><div className="flex flex-col gap-3 sm:flex-row"><button type="button" onClick={addToPlan} className="rounded-full border border-[#789276] px-5 py-3 text-sm font-medium text-[#4f6d54]">加入我的申请计划</button><button type="button" onClick={saveResult} className="inline-flex items-center justify-center gap-2 rounded-full bg-[#2f2924] px-5 py-3 text-sm font-medium text-white"><Check size={16} />保存对比结果</button></div></div>
     </div>
   </DashboardShell>;
 }
