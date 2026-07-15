@@ -172,11 +172,11 @@ export async function recordProgramSourceSnapshot(input: {
   const contentHash = createHash("sha256").update(input.content).digest("hex");
   if (!client) return { recorded: false, changed: false, contentHash };
   const previous = await client.from("program_sources")
-    .select("id,content_hash")
+    .select("id,content_hash,verified_content_hash")
     .eq("program_id", input.programId)
     .eq("source_url", input.source.url)
     .maybeSingle();
-  const changed = Boolean(previous.data?.content_hash && previous.data.content_hash !== contentHash);
+  const changed = Boolean(previous.data?.verified_content_hash && previous.data.verified_content_hash !== contentHash);
   const sourceResult = await client.from("program_sources").upsert({
     program_id: input.programId,
     source_url: input.source.url,
@@ -203,7 +203,7 @@ export async function recordProgramSourceSnapshot(input: {
   if (changed) {
     await createKnowledgeReview(input.programId, "学校官方页面内容发生变化，发布前需要复核", {
       sourceUrl: input.source.url,
-      previousHash: previous.data?.content_hash,
+      previousVerifiedHash: previous.data?.verified_content_hash,
       currentHash: contentHash,
     });
   }
@@ -260,4 +260,19 @@ export async function getProgramDiscoveryInput(programId: string): Promise<impor
     officialDomains: [new URL(officialProgramUrl).hostname],
     registeredUrls: [officialProgramUrl],
   };
+}
+
+
+export async function markProgramSourcesPublished(programId: string) {
+  const client = adminClient();
+  if (!client) return;
+  const sources = await client.from("program_sources").select("id,content_hash").eq("program_id", programId).eq("status", "active");
+  if (sources.error) throw sources.error;
+  for (const source of sources.data ?? []) {
+    if (!source.content_hash) continue;
+    const result = await client.from("program_sources")
+      .update({ verified_content_hash: source.content_hash })
+      .eq("id", source.id);
+    if (result.error) throw result.error;
+  }
 }
