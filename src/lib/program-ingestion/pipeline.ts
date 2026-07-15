@@ -63,6 +63,19 @@ export async function ingestProgramContent(jobId: string, input: ProgramDiscover
         if (source.type === "programme_specification_pdf" || source.url.toLowerCase().endsWith(".pdf")) {
           if (!dependencies.pdfExtractor) continue;
           const document = await dependencies.pdfExtractor.extract(source.url);
+          const identity = validateProgramIdentity({
+            html: document.text,
+            universityName: input.universityName,
+            programName: input.programName,
+            intakeYear: input.intakeYear,
+          });
+          if (!identity.valid) {
+            await createKnowledgeReview(input.programId, "官方 PDF 与目标学校或专业名称无法可靠对应", {
+              url: source.url,
+              identityConfidence: identity.confidence,
+            });
+            continue;
+          }
           const snapshot = await recordProgramSourceSnapshot({
             programId: input.programId,
             source,
