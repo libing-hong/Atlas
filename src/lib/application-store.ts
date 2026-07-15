@@ -1,7 +1,7 @@
 import { ApplicationMaterial, ApplicationRecord, SchoolRecommendation, commonMaterials, createApplicationRecord } from "./application-prototype-data";
 import { PurchasedService, servicePricing } from "./service-pricing";
+import { emitPlanningStateChange, readActivePlanningRunId, readRunSelection, updatePlanningRun, writeRunSelection } from "./planning-store";
 
-const selectionKey = "atlas.application.selection.v1";
 const recordsKey = "atlas.application.records.v1";
 const workspaceKey = "atlas.application.workspace.v1";
 const serviceKey = "atlas.application.purchased-service.v1";
@@ -31,6 +31,7 @@ export type ServiceOrderItem = {
 export type ServiceOrder = {
   id: string;
   userId: string;
+  planningRunId: string;
   serviceType: ServiceType;
   status: ServiceOrderStatus;
   currency: "CNY";
@@ -45,6 +46,7 @@ export type ServiceOrder = {
 
 function emitApplicationStateChange() {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(applicationStateEvent));
+  emitPlanningStateChange();
 }
 
 function createId(prefix: string) {
@@ -63,9 +65,11 @@ export function subscribeToApplicationState(onChange: () => void) {
 
 export function getApplicationStateSnapshot() {
   if (typeof window === "undefined") return "server";
+  const activeRunId = readActivePlanningRunId();
   return JSON.stringify({
+    activeRunId,
     selection: readApplicationSelection(),
-    records: readApplicationRecords(),
+    records: readApplicationRecords(activeRunId),
     mode: readApplicationMode(),
     workspacePurchased: isApplicationWorkspacePurchased(),
     orders: readServiceOrders(),
@@ -76,16 +80,14 @@ export function getServerApplicationStateSnapshot() {
   return "server";
 }
 
-export function readApplicationSelection(): string[] {
-  if (typeof window === "undefined") return [];
-  try { return JSON.parse(window.localStorage.getItem(selectionKey) ?? "[]") as string[]; } catch { return []; }
+export function readApplicationSelection(planningRunId = readActivePlanningRunId()): string[] {
+  return readRunSelection(planningRunId);
 }
 
-export function writeApplicationSelection(ids: string[]) {
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(selectionKey, JSON.stringify(ids));
-    emitApplicationStateChange();
-  }
+export function writeApplicationSelection(ids: string[], planningRunId = readActivePlanningRunId()) {
+  if (!planningRunId) return;
+  writeRunSelection(planningRunId, ids);
+  emitApplicationStateChange();
 }
 
 export function isApplicationWorkspacePurchased(): boolean {
@@ -119,23 +121,25 @@ export function writeApplicationMode(mode: Exclude<ApplicationMode, "unselected"
   }
 }
 
-export function activateApplicationWorkspace(selectedIds: string[], schools: SchoolRecommendation[]) {
+export function activateApplicationWorkspace(selectedIds: string[], schools: SchoolRecommendation[], planningRunId = readActivePlanningRunId()) {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(workspaceKey, "true");
     window.localStorage.setItem("atlas.application.workspace.purchasedAt", new Date().toISOString());
   }
-  return confirmApplications(selectedIds, schools);
+  return confirmApplications(selectedIds, schools, planningRunId);
 }
 
-export function readApplicationRecords(): ApplicationRecord[] {
+export function readApplicationRecords(planningRunId?: string): ApplicationRecord[] {
   if (typeof window === "undefined") return [];
   try {
     const records = JSON.parse(window.localStorage.getItem(recordsKey) ?? "[]") as ApplicationRecord[];
-    return records.map((record) => ({
+    const normalized = records.map((record) => ({
       ...record,
+      planningRunId: record.planningRunId ?? "legacy",
       detectedMaterialCount: record.detectedMaterialCount ?? record.preparedMaterials,
       applicationProgress: record.applicationProgress ?? Math.round((record.preparedMaterials / Math.max(record.totalMaterials, 1)) * 45),
     }));
+    return planningRunId ? normalized.filter((record) => record.planningRunId === planningRunId) : normalized;
   } catch { return []; }
 }
 
@@ -157,11 +161,13 @@ export function updateApplicationRecord(applicationId: string, changes: Partial<
   return next;
 }
 
-export function confirmApplications(selectedIds: string[], schools: SchoolRecommendation[]) {
+export function confirmApplications(selectedIds: string[], schools: SchoolRecommendation[], planningRunId = readActivePlanningRunId()) {
+  if (!planningRunId) throw new Error("No active planning run");
   const records = readApplicationRecords();
-  const nextRecords = records.filter((record) => selectedIds.includes(record.schoolRecommendationId));
+  const otherRunRecords = records.filter((record) => record.planningRunId !== planningRunId);
+  const nextRecords = records.filter((record) => record.planningRunId === planningRunId && selectedIds.includes(record.schoolRecommendationId));
   for (const school of schools.filter((item) => selectedIds.includes(item.id))) {
-    const generated = createApplicationRecord(school);
+    const generated = createApplicationRecord(school, planningRunId);
     const index = nextRecords.findIndex((item) => item.schoolRecommendationId === school.id);
     if (index >= 0) {
       const existing = nextRecords[index];
@@ -176,8 +182,9 @@ export function confirmApplications(selectedIds: string[], schools: SchoolRecomm
       };
     } else nextRecords.push(generated);
   }
-  writeApplicationSelection(selectedIds);
-  writeApplicationRecords(nextRecords);
+  writeApplicationSelection(selectedIds, planningRunId);
+  writeApplicationRecords([...otherRunRecords, ...nextRecords]);
+  updatePlanningRun(planningRunId, { status: "schools_confirmed" });
   return nextRecords;
 }
 
@@ -195,11 +202,12 @@ function writeServiceOrders(orders: ServiceOrder[]) {
 
 export function readActiveServiceOrder(serviceType?: ServiceType) {
   if (typeof window === "undefined") return undefined;
+  const planningRunId = readActivePlanningRunId();
   const activeId = window.localStorage.getItem(activeServiceOrderKey);
   const orders = readServiceOrders();
   const active = orders.find((order) => order.id === activeId);
-  if (active && (!serviceType || active.serviceType === serviceType)) return active;
-  return [...orders].reverse().find((order) => !serviceType || order.serviceType === serviceType);
+  if (active && active.planningRunId === planningRunId && (!serviceType || active.serviceType === serviceType)) return active;
+  return [...orders].reverse().find((order) => order.planningRunId === planningRunId && (!serviceType || order.serviceType === serviceType));
 }
 
 export function getPaidSubmissionApplicationIds() {
@@ -236,6 +244,7 @@ export function createApplicationSubmissionOrder(records: ApplicationRecord[]) {
   return saveDraftOrder({
     id: orderId,
     userId: "prototype-user",
+    planningRunId: records[0]?.planningRunId ?? readActivePlanningRunId() ?? "legacy",
     serviceType: "single_school_submission",
     status: "pending_payment",
     currency: "CNY",
@@ -258,6 +267,7 @@ export function createFixedServiceOrder(serviceType: Exclude<ServiceType, "singl
   const order: ServiceOrder = {
     id: orderId,
     userId: "prototype-user",
+    planningRunId: records[0]?.planningRunId ?? readActivePlanningRunId() ?? "legacy",
     serviceType,
     status: "pending_payment",
     currency: "CNY",
