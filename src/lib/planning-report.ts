@@ -92,6 +92,8 @@ export function buildPlanningReport(profile: StudentProfile, portfolio: Portfoli
     ...(profile.averageScore !== undefined && profile.averageScore < 75 ? [`当前平均分为 ${profile.averageScore}%，需要优先筛选成绩要求更匹配的项目`] : []),
     ...(!experienceCount ? ["补充课程项目、实习或工作经历，增强专业动机说明"] : []),
     ...(!profile.institutionNameEn ? ["确认本科院校英文官方名称"] : []),
+    ...(profile.targetSubjects.length ? [`逐项核对${profile.targetSubjects.join("、")}项目的先修课程与材料要求`] : []),
+    ...(profile.targetCountries.length > 1 ? [`分别核对${profile.targetCountries.join("、")}的申请系统与时间安排`] : []),
     ...(portfolio.some((item) => item.result.unresolvedItems.length) ? ["逐项确认本科院校接受范围和最新公开要求"] : []),
   ].slice(0, 5);
 
