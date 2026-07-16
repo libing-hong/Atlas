@@ -1,0 +1,14 @@
+[
+  {
+    "institution": "KEDGE Business School",
+    "programme": "MSc Arts & Creative Industries Management",
+    "officialUrl": "https://student.kedge.edu/programmes/arts-creative-industries-management",
+    "countries": ["法国", "France"],
+    "fieldTerms": ["Arts Management", "Arts and Cultural Management", "Cultural Management", "Creative Industries Management", "Management culturel", "Industries créatives et culturelles"],
+    "discoveryQuery": "official web discovery: Creative Industries Management France master",
+    "discoveredAt": "2026-07-16T21:00:00.000Z",
+    "sourceType": "external_official_discovery",
+    "verificationStatus": "partially_verified"
+  }
+]
+
