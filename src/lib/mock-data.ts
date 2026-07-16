@@ -97,7 +97,7 @@ export const applications: Application[] = [
     progress: 32,
   },
   {
-    school: "ESSEC Business School",
+    school: "目标院校",
     country: "法国",
     program: "Master in Management",
     status: "补材料",
@@ -142,3 +142,5 @@ export const adminMetrics = [
   { label: "申请中学生", value: "73", tone: "mist" },
   { label: "已获Offer学生", value: "9", tone: "gold" },
 ];
+
+

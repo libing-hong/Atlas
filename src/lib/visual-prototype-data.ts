@@ -186,9 +186,9 @@ const nodes: JourneyNode[] = [
     completionRequirement: "Accommodation evidence attached to visa document set.",
     officialResources: [
       {
-        title: "ESSEC housing and arrival guidance",
-        organization: "ESSEC Business School",
-        url: "https://www.essec.edu/en/pages/about-essec/essec-business-school/essec-housing/",
+        title: "目标院校 housing and arrival guidance",
+        organization: "目标院校",
+        url: "#",
         actionLabel: "View official requirements",
         resourceType: "guidance",
         country: "France",
@@ -271,7 +271,7 @@ const nodes: JourneyNode[] = [
 const preparedItems: PreparedItem[] = [
   {
     title: "Personalized Visa Checklist",
-    description: "A checklist tailored to France, ESSEC, your intake, and your current missing proof.",
+    description: "A checklist tailored to France, 目标院校, your intake, and your current missing proof.",
     action: "Open",
   },
   {
@@ -337,7 +337,7 @@ const documents: MaterialDocument[] = [
   },
   {
     id: "offer-letter",
-    name: "ESSEC offer letter",
+    name: "目标院校 offer letter",
     category: "Admission",
     status: "Ready",
     uploadDate: "2026-07-08",
@@ -437,3 +437,6 @@ export const DevelopmentMaterialRepository = {
     expiring: documents.filter((document) => document.status === "Expired").length,
   }),
 };
+
+
+

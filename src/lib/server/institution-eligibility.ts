@@ -4,11 +4,7 @@ import path from "node:path";
 type PrivateSheet = { sheetName: string; sourceYear: number; ruleType: string; percentages: number[]; searchText: string; confidential: true; importedAt: string };
 type PrivateIndex = { version: string; sourceType: string; sheets: PrivateSheet[] };
 
-const targetSheetHints: Record<string, string[]> = {
-  "leeds-marketing": ["leeds", "利兹"],
-  "birmingham-business": ["birmingham", "伯明翰"],
-  "exeter-marketing": ["exeter", "埃克塞特"],
-};
+const targetSheetHints: Record<string, string[]> = {};
 
 function readPrivateIndex(): PrivateIndex | null {
   const filePath = path.join(process.cwd(), ".atlas-private", "uk-admission-rules.json");
@@ -34,3 +30,6 @@ export function checkInstitutionEligibility({ targetUniversityId, institutionNam
     confidential: true,
   };
 }
+
+
+

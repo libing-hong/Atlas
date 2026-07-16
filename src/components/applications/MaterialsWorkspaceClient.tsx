@@ -7,6 +7,7 @@ import { ApplicationMode, getMaterialsForApplication, readApplicationMode, readA
 import { AdmissionRequirement, ApplicationMaterial, ApplicationRecord, getAdmissionRequirements, RequirementStatus, SchoolRecommendation } from "@/lib/application-prototype-data";
 import { getAdmissionKnowledge } from "@/lib/admission-knowledge";
 import { readActivePlanningRun } from "@/lib/planning-store";
+import { readStudentProfile, StudentProfile, writeStudentProfile, profileDisplay } from "@/lib/student-profile";
 import { InstitutionEligibilityPanel, InstitutionVerification } from "./InstitutionEligibilityPanel";
 
 const requirementLabels: Record<RequirementStatus, string> = { meets: "已达标", mostly_meets: "基本符合", needs_confirmation: "需要确认", gap_detected: "尚未达标", unknown: "信息不足" };
@@ -32,7 +33,9 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
   const [notice, setNotice] = useState("");
   const [activeRequirement, setActiveRequirement] = useState<AdmissionRequirement | null>(null);
   const [confirmedIds, setConfirmedIds] = useState<string[]>([]);
-  const [institution, setInstitution] = useState<InstitutionVerification>({ complete: false, institutionName: "深圳大学", englishName: "Shenzhen University", average: 78 });
+  const [profile, setProfile] = useState<StudentProfile>(() => readStudentProfile());
+  const primaryEducation = profile.educationHistory[0];
+  const [institution, setInstitution] = useState<InstitutionVerification>({ complete: false, institutionName: primaryEducation?.institutionNameZh ?? "", englishName: primaryEducation?.institutionNameEn ?? "", average: primaryEducation?.officialAverage ?? primaryEducation?.weightedAverage ?? primaryEducation?.arithmeticAverage ?? 0 });
   const [applicationMode, setApplicationMode] = useState<ApplicationMode>("unselected");
   const institutionRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -136,11 +139,11 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
       </div>
     </Card>
 
-    <div ref={institutionRef} className="scroll-mt-6"><InstitutionEligibilityPanel targetUniversityId={school.id} targetUniversityName={school.universityName} programName={school.programName} intake={school.intake} onStatusChange={(value) => { setInstitution(value); if (value.complete && gradeRequirement) { persistConfirmations([...new Set([...confirmedIds, gradeRequirement.id])]); setNotice("院校核验已更新，录取要求状态和待确认事项已自动重新计算。"); } }} /></div>
+    <div ref={institutionRef} className="scroll-mt-6"><InstitutionEligibilityPanel targetUniversityId={school.id} targetUniversityName={school.universityName} institutionName={primaryEducation?.institutionNameEn ?? primaryEducation?.institutionNameZh ?? ""} programName={school.programName} intake={school.intake} onStatusChange={(value) => { setInstitution(value); if (value.complete && gradeRequirement) { persistConfirmations([...new Set([...confirmedIds, gradeRequirement.id])]); setNotice("院校核验已更新，录取要求状态和待确认事项已自动重新计算。"); } }} /></div>
 
     <Card><div className="flex items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.22em] text-[#9a8b7c]">材料状态</p><h2 className="mt-2 font-editorial text-3xl font-semibold text-[#2f2924]">申请材料</h2><p className="mt-2 text-sm leading-6 text-[#6f6256]">Atlas 会将已上传的通用材料自动关联到符合要求的学校。</p></div><span className="text-sm text-[#8f847a]">已确认 {Object.values(statuses).filter((status) => status === "prepared" || status === "confirmed").length} 项</span></div><div className="mt-5 grid gap-3 md:grid-cols-2">{baseMaterials.map((material) => <MaterialRow key={material.id} material={material} status={statuses[material.id] ?? material.status} fileName={files[material.id]} onUpload={() => openPicker(material.id)} onConfirm={() => confirmFile(material)} onPreview={() => setNotice(`${material.name} 当前文件：${files[material.id] ?? "Atlas 已检测到的材料"}`)} />)}</div></Card>
 
-    {activeRequirement ? <RequirementConfirmModal requirement={activeRequirement} materialStatuses={statuses} onClose={() => setActiveRequirement(null)} onMessage={setNotice} onConfirm={async () => { await new Promise((resolve) => window.setTimeout(resolve, 650)); persistConfirmations([...new Set([...confirmedIds, activeRequirement.id])]); setActiveRequirement(null); setNotice(`${activeRequirement.label}已确认，Atlas 已重新计算录取要求状态。`); }} /> : null}
+    {activeRequirement ? <RequirementConfirmModal requirement={activeRequirement} materialStatuses={statuses} profile={profile} onProfileChange={(next) => { writeStudentProfile(next); setProfile(next); }} onClose={() => setActiveRequirement(null)} onMessage={setNotice} onConfirm={async () => { await new Promise((resolve) => window.setTimeout(resolve, 650)); persistConfirmations([...new Set([...confirmedIds, activeRequirement.id])]); setActiveRequirement(null); setNotice(`${activeRequirement.label}已确认，Atlas 已重新计算录取要求状态。`); }} /> : null}
   </div>;
 }
 
@@ -172,19 +175,19 @@ function ApplicationEntryAction({ school, applicationId }: { school: SchoolRecom
   return <button type="button" onClick={() => setConfirming(true)} className="inline-flex items-center gap-1.5 rounded-full bg-[#2f2924] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#493d34]">{providerLabel}<ArrowUpRight size={13} /></button>;
 }
 
-function RequirementConfirmModal({ requirement, materialStatuses, onClose, onConfirm, onMessage }: { requirement: AdmissionRequirement; materialStatuses: Record<string, string>; onClose: () => void; onConfirm: () => Promise<void>; onMessage: (message: string) => void }) {
+function RequirementConfirmModal({ requirement, materialStatuses, profile, onProfileChange, onClose, onConfirm, onMessage }: { requirement: AdmissionRequirement; materialStatuses: Record<string, string>; profile: StudentProfile; onProfileChange: (profile: StudentProfile) => void; onClose: () => void; onConfirm: () => Promise<void>; onMessage: (message: string) => void }) {
   const [state, setState] = useState<VerificationState>("idle");
   const [editMode, setEditMode] = useState(false);
   const [excluded, setExcluded] = useState(false);
-  async function confirm() { setState("loading"); try { await onConfirm(); setState("success"); } catch { setState("error"); } }
+  async function confirm() { setState("loading"); try { onProfileChange(profile); await onConfirm(); setState("success"); } catch { setState("error"); } }
   const isDegree = requirement.label.includes("学位");
   const isLanguage = requirement.label.includes("英语") || requirement.label.includes("语言");
   const isDocuments = requirement.label.includes("材料");
   const title = isDegree ? "确认学历信息" : isLanguage ? "确认语言成绩" : isDocuments ? "确认申请材料" : `确认${requirement.label}`;
   return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#2f2924]/25 p-4 md:items-center"><div role="dialog" aria-modal="true" aria-label={title} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[24px] bg-[#fffaf3] p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.2em] text-[#9a8b7c]">要求确认</p><h2 className="mt-2 font-editorial text-3xl font-semibold text-[#2f2924]">{title}</h2></div><button type="button" onClick={onClose} disabled={state === "loading"} aria-label="关闭" className="grid h-9 w-9 place-items-center rounded-full border border-[#d8ccbe] text-[#6f6256]"><X size={16} /></button></div>
     <div className="mt-5 space-y-4">
-      {isDegree ? <DegreeDetails editable={editMode} /> : null}
-      {isLanguage ? <LanguageDetails editable={editMode} excluded={excluded} /> : null}
+      {isDegree ? <DegreeDetails profile={profile} /> : null}
+      {isLanguage ? <LanguageDetails profile={profile} excluded={excluded} /> : null}
       {isDocuments ? <MaterialChecklist materialStatuses={materialStatuses} /> : null}
       {!isDegree && !isLanguage && !isDocuments ? <div className="space-y-3 text-sm leading-6 text-[#4a3d34]"><p className="rounded-2xl bg-[#f7f0e8] p-4"><strong>学校要求：</strong>{requirement.schoolRequirement}</p><p className="rounded-2xl bg-[#f7f0e8] p-4"><strong>Atlas 已识别：</strong>{requirement.userSituation}</p></div> : null}
       {state === "error" ? <p className="text-sm text-[#9a574d]">暂时无法更新信息，请重新尝试。</p> : null}
@@ -199,14 +202,14 @@ function RequirementConfirmModal({ requirement, materialStatuses, onClose, onCon
   </div></div>;
 }
 
-function DegreeDetails({ editable }: { editable: boolean }) {
-  const rows = [["本科院校", "Shenzhen University"], ["学位名称", "Bachelor of Management"], ["学历层级", "本科"], ["专业", "市场营销"], ["毕业状态", "预计毕业"], ["毕业时间", "2027年6月"], ["学位证明", "已检测到"], ["毕业证明", "已检测到"]];
-  return <div className="grid gap-3 rounded-2xl bg-[#f7f0e8] p-4 sm:grid-cols-2">{rows.map(([label, value]) => <label key={label} className="text-sm"><span className="block text-xs text-[#8f847a]">{label}</span>{editable ? <input defaultValue={value} className="quiet-input mt-1 rounded-lg" /> : <span className="mt-1 block text-[#3f352e]">{value}</span>}</label>)}</div>;
+function DegreeDetails({ profile }: { profile: StudentProfile }) {
+  const ed=profile.educationHistory[0]; const rows=[["本科院校",ed?.institutionNameZh||ed?.institutionNameEn],["学位名称",ed?.degreeName],["学历层级",ed?.degreeLevel],["专业",ed?.major],["毕业状态",ed?.graduationStatus==="graduated"?"已毕业":ed?.graduationStatus==="expected"?"预计毕业":null],["毕业时间",ed?.graduationYear?`${ed.graduationYear}年${ed.graduationMonth??"待确认"}月`:null]];
+  return <div className="grid gap-3 rounded-2xl bg-[#f7f0e8] p-4 sm:grid-cols-2">{rows.map(([label,value])=><div key={label} className="text-sm"><span className="block text-xs text-[#8f847a]">{label}</span><span className="mt-1 block text-[#3f352e]">{profileDisplay(value)}</span></div>)}</div>;
 }
 
-function LanguageDetails({ editable, excluded }: { editable: boolean; excluded: boolean }) {
-  const rows = [["考试类型", "IELTS Academic"], ["总分", "6.5"], ["听力", "6.5"], ["阅读", "7.0"], ["写作", "5.5"], ["口语", "6.5"], ["考试日期", "2026年3月18日"]];
-  return <><div className="grid gap-3 rounded-2xl bg-[#f7f0e8] p-4 sm:grid-cols-2">{rows.map(([label, value]) => <label key={label} className="text-sm"><span className="block text-xs text-[#8f847a]">{label}</span>{editable ? <input defaultValue={value} className="quiet-input mt-1 rounded-lg" /> : <span className="mt-1 block text-[#3f352e]">{value}</span>}</label>)}</div><div className="rounded-2xl border border-[#e8dfd3] p-4 text-sm"><p><strong>学校要求：</strong>IELTS 总分 6.5，单项不低于 6.0</p><p className="mt-2 font-medium text-[#9a574d]">尚未达标：写作低于要求 0.5 分</p>{excluded ? <p className="mt-2 text-[#6f6256]">已标记为暂不提交。</p> : null}</div></>;
+function LanguageDetails({ profile, excluded }: { profile: StudentProfile; excluded: boolean }) {
+  if(!profile.languageTests.length)return <div className="rounded-2xl bg-[#f7f0e8] p-4 text-sm">未提供/待确认</div>;
+  return <div className="space-y-3">{profile.languageTests.map(test=><div key={test.id} className="rounded-2xl bg-[#f7f0e8] p-4"><strong>{test.language==="English"?"英语":"法语"} · {test.type}</strong><div className="mt-3 grid gap-2 text-sm sm:grid-cols-3"><span>总分/等级：{profileDisplay(test.overall??test.level)}</span><span>听力：{profileDisplay(test.listening)}</span><span>阅读：{profileDisplay(test.reading)}</span><span>写作：{profileDisplay(test.writing)}</span><span>口语：{profileDisplay(test.speaking)}</span><span>日期：{profileDisplay(test.testDate)}</span></div></div>)}{excluded?<p className="text-sm">已标记为暂不提交。</p>:null}</div>;
 }
 
 function MaterialChecklist({ materialStatuses }: { materialStatuses: Record<string, string> }) {
@@ -221,3 +224,5 @@ function MaterialRow({ material, status, fileName, onUpload, onConfirm, onPrevie
   const confirmed = status === "prepared" || status === "confirmed"; const waiting = status === "uploading" || status === "processing"; const rejected = status === "rejected";
   return <div className={`rounded-2xl border p-4 ${confirmed ? "border-[#c9dbc5] bg-[#e7ece7]" : rejected ? "border-[#e7d0c7] bg-[#f6e7df]" : "border-[#e8dfd3] bg-[#fffaf3]"}`}><div className="flex items-start justify-between gap-3"><div className="flex gap-3">{confirmed ? <CheckCircle2 className="mt-0.5 shrink-0 text-[#5f805f]" size={19} /> : <CircleAlert className="mt-0.5 shrink-0 text-[#9a6257]" size={19} />}<div><p className="font-medium text-[#2f2924]">{material.name}</p><p className={`mt-1 text-xs ${confirmed ? "text-[#4f6d54]" : rejected ? "text-[#8a5f54]" : "text-[#6f6256]"}`}>{materialLabels[status] ?? "未检测到"}</p></div></div>{material.reusableFor.includes("all") ? <span className="text-xs text-[#6f6256]">可复用</span> : null}</div><p className="mt-3 text-sm leading-6 text-[#6f6256]">{material.note}</p>{fileName ? <p className="mt-2 truncate text-xs text-[#8f847a]">文件：{fileName}</p> : null}<div className="mt-3 flex flex-wrap gap-2">{confirmed ? <><button type="button" onClick={onPreview} className="inline-flex items-center gap-2 text-xs text-[#4f6d54] underline underline-offset-4"><Copy size={14} />预览材料</button><button type="button" onClick={onUpload} className="inline-flex items-center gap-2 text-xs text-[#6f6256] underline underline-offset-4"><Upload size={14} />替换材料</button></> : waiting ? <button type="button" disabled className="rounded-full bg-[#e8dfd3] px-4 py-2 text-xs text-[#8f847a]">{materialLabels[status]}……</button> : status === "needs_confirmation" ? <button type="button" onClick={onConfirm} className="rounded-full bg-[#5f805f] px-4 py-2 text-xs font-medium text-white">确认材料</button> : <button type="button" onClick={onUpload} className="inline-flex items-center gap-2 rounded-full border border-[#d8ccbe] bg-[#f7f0e8] px-4 py-2 text-xs font-medium text-[#4a3d34]"><FileUp size={14} />{rejected ? "重新上传" : "上传材料"}</button>}</div></div>;
 }
+
+

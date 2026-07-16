@@ -17,7 +17,7 @@ const zhText: Record<string, string> = {
   "Lin Muqing": "林沐晴",
   "France student visa application": "法国学生签证申请",
   "Paris, France": "法国巴黎",
-  "ESSEC Business School": "ESSEC 商学院",
+  "目标院校": "目标院校",
   "Master in Management": "管理学硕士",
   "September 2026": "2026 年 9 月",
   Application: "申请",
@@ -69,7 +69,7 @@ const zhText: Record<string, string> = {
   "Start online application": "开始线上申请",
   "Etudes en France procedure": "Etudes en France 流程",
   "Open official platform": "打开官方平台",
-  "ESSEC housing and arrival guidance": "ESSEC 住宿与抵达官方说明",
+  "目标院校 housing and arrival guidance": "目标院校 住宿与抵达官方说明",
   "View official requirements": "查看官方要求",
   "Etudes en France account": "Etudes en France 账号",
   "Programme details": "项目信息",
@@ -116,8 +116,8 @@ const zhText: Record<string, string> = {
   "Arrival plan created from accepted offer and destination facts.": "已根据录取和目的地信息生成抵达计划。",
 
   "Personalized Visa Checklist": "个性化签证清单",
-  "A checklist tailored to France, ESSEC, your intake, and your current missing proof.":
-    "根据法国、ESSEC、入学时间和当前缺失证明生成的清单。",
+  "A checklist tailored to France, 目标院校, your intake, and your current missing proof.":
+    "根据法国、目标院校、入学时间和当前缺失证明生成的清单。",
   "Pre-filled Personal Details": "预填个人信息",
   "Name, date of birth, passport expiry, school, programme, and intake fields.":
     "姓名、出生日期、护照有效期、学校、项目和入学时间字段。",
@@ -169,7 +169,7 @@ const zhText: Record<string, string> = {
   "Housing proof lacks move-in date": "住宿证明缺少入住日期",
   "Programme name differs from offer": "项目名称与录取通知不一致",
   "Bank statement is too old": "银行流水时间太旧",
-  "ESSEC offer letter": "ESSEC 录取通知",
+  "目标院校 offer letter": "目标院校 录取通知",
   "English transcript": "英文成绩单",
   "CV - finance version": "CV - 金融方向版本",
   "Personal statement": "个人陈述",
@@ -306,3 +306,5 @@ export function LanguageToggle() {
     </div>
   );
 }
+
+

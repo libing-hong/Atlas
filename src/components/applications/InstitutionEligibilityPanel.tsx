@@ -28,8 +28,8 @@ const secondaryButton = "inline-flex items-center justify-center gap-2 rounded-f
 
 export function InstitutionEligibilityPanel({
   targetUniversityId,
-  targetUniversityName = "University of Leeds",
-  institutionName = "Shenzhen University",
+  targetUniversityName = "目标院校待确认",
+  institutionName = "",
   average = 78,
   programName = "MSc International Marketing",
   intake = "2027 秋季",
@@ -49,7 +49,7 @@ export function InstitutionEligibilityPanel({
   const [selectedAverage, setSelectedAverage] = useState(average);
   const [averageMethod, setAverageMethod] = useState("成绩单官方均分");
   const [form, setForm] = useState<InstitutionForm>({
-    chineseName: "深圳大学",
+    chineseName: institutionName,
     englishName: institutionName,
     aliases: "",
     city: "深圳",
@@ -143,7 +143,7 @@ export function InstitutionEligibilityPanel({
 
       <dl className="mt-5 grid gap-x-8 gap-y-3 rounded-2xl bg-[#f7f0e8] p-4 text-sm md:grid-cols-2">
         <Summary label="目标学校" value={targetUniversityName} />
-        <Summary label="目标学院" value="Leeds University Business School" />
+        <Summary label="目标学院" value="目标院校公开规则" />
         <Summary label="目标专业" value={programName} />
         <Summary label="你的本科院校" value={form.englishName} />
       </dl>
@@ -153,7 +153,7 @@ export function InstitutionEligibilityPanel({
           <p>中文名称：{form.chineseName}</p><p>英文名称：{form.englishName}</p><p>学历颁发院校：{form.degreeAwardingInstitution}</p>
         </VerificationStep>
         <VerificationStep number="2" title="确认学院与专业" status={completed.scope} onClick={() => setActiveStep("scope")}>
-          <p>当前规则：Leeds University Business School 中国申请规则</p><p>适用专业：{programName}</p><p>入学时间：{intake}</p>
+          <p>当前规则：目标院校公开规则 中国申请规则</p><p>适用专业：{programName}</p><p>入学时间：{intake}</p>
         </VerificationStep>
         <VerificationStep number="3" title="确认本科平均成绩" status={completed.average} onClick={() => setActiveStep("average")}>
           <p>成绩单官方均分：78%</p><p>算术平均分：77.6%</p><p>加权平均分：78.3%</p><p>当前采用：{averageMethod}</p>
@@ -166,7 +166,7 @@ export function InstitutionEligibilityPanel({
           <Result label="本科院校" value="已在接受范围内找到" />
           <Result label="你的确认均分" value={`${selectedAverage}%`} />
           <div className="sm:col-span-2"><Result label="当前结果" value="已达到当前公开成绩标准" positive /></div>
-          <div className="sm:col-span-2"><a href="https://business.leeds.ac.uk/masters/doc/accepted-chinese-institutions" target="_blank" rel="noreferrer" className={secondaryButton}>查看学校官方名单</a></div>
+          <div className="sm:col-span-2"><a href="#" target="_blank" rel="noreferrer" className={secondaryButton}>查看学校官方名单</a></div>
         </div> : <p className="mt-3 text-sm leading-6 text-[#6f6256]">确认院校名称、规则适用范围和均分口径后，Atlas 会重新核对当前公开成绩标准。</p>}
       </div>
     </Card>
@@ -209,7 +209,7 @@ function StepModal({ step, actionState, form, programName, intake, averageMethod
   const primaryLabel = step === "name" ? "确认信息正确" : step === "scope" ? "确认适用范围" : "确认使用该均分";
   return <ModalShell title={title} onClose={onClose} disabled={actionState === "loading"}>
     {step === "name" ? <div className="rounded-2xl bg-[#f7f0e8] p-4 text-sm leading-7 text-[#4a3d34]"><p>中文名称：{form.chineseName}</p><p>英文名称：{form.englishName}</p><p>学历颁发院校：{form.degreeAwardingInstitution}</p></div> : null}
-    {step === "scope" ? <div className="rounded-2xl bg-[#f7f0e8] p-4 text-sm leading-7 text-[#4a3d34]"><p>当前使用规则：Leeds University Business School 中国申请规则</p><p>适用专业：{programName}</p><p>入学时间：{intake}</p></div> : null}
+    {step === "scope" ? <div className="rounded-2xl bg-[#f7f0e8] p-4 text-sm leading-7 text-[#4a3d34]"><p>当前使用规则：目标院校公开规则 中国申请规则</p><p>适用专业：{programName}</p><p>入学时间：{intake}</p></div> : null}
     {step === "average" ? <div className="space-y-2">{[["成绩单官方均分", 78], ["算术平均分", 77.6], ["加权平均分", 78.3]].map(([method, value]) => <button key={method} type="button" onClick={() => onAverageMethod(String(method), Number(value))} className={`flex w-full items-center justify-between rounded-xl border p-3 text-left text-sm ${averageMethod === method ? "border-[#7f9b7d] bg-[#eef4ed]" : "border-[#d8ccbe]"}`}><span>{method}</span><strong>{value}%</strong></button>)}</div> : null}
     {actionState === "error" ? <p className="mt-3 text-sm text-[#9a574d]">暂时无法更新信息，请重新尝试。</p> : null}
     {actionState === "success" ? <p className="mt-3 text-sm text-[#4f6d54]">信息已确认，录取要求正在更新。</p> : null}
@@ -244,3 +244,5 @@ function InstitutionEditModal({ form, actionState, onChange, onClose, onSave }: 
 
 function EditField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label className="block text-sm text-[#4a3d34]">{label}<input value={value} onChange={(event) => onChange(event.target.value)} className="quiet-input mt-2 rounded-xl" /></label>; }
 function ModalShell({ title, children, onClose, disabled }: { title: string; children: React.ReactNode; onClose: () => void; disabled: boolean }) { return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#2f2924]/25 p-4 md:items-center"><div role="dialog" aria-modal="true" aria-label={title} className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-[24px] bg-[#fffaf3] p-6 shadow-2xl"><div className="mb-5 flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.2em] text-[#9a8b7c]">院校核验</p><h2 className="mt-2 font-editorial text-3xl font-semibold text-[#2f2924]">{title}</h2></div><button type="button" onClick={onClose} disabled={disabled} aria-label="关闭" className="grid h-9 w-9 place-items-center rounded-full border border-[#d8ccbe] text-[#6f6256] disabled:opacity-50"><X size={16} /></button></div>{children}</div></div>; }
+
+

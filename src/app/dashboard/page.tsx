@@ -58,7 +58,7 @@ export default function DashboardPage() {
             <Fact label={{ en: "Current stage", zh: "当前阶段" }} value={text(currentStage.name)} />
             <Fact label={{ en: "Destination", zh: "目的地" }} value={applicationRecords[0]?.country ?? profile?.targetCountries.join(" / ") ?? text(context.destination)} />
             <Fact label={{ en: "Intake", zh: "入学时间" }} value={profile ? `${profile.targetIntake.year} ${profile.targetIntake.term === "spring" ? "春季" : profile.targetIntake.term === "summer" ? "夏季" : "秋季"}` : text(context.intakeDate)} />
-            <Fact label={{ en: "School", zh: "学校" }} value={profile?.institutionNameZh || profile?.institutionNameEn || text(context.school)} />
+            <Fact label={{ en: "School", zh: "学校" }} value={profile?.educationHistory[0]?.institutionNameZh || profile?.educationHistory[0]?.institutionNameEn || "未提供/待确认"} />
             <Fact label={{ en: "Programme", zh: "项目" }} value={profile?.targetSubjects.join("、") || text(context.programme)} />
           </div>
         </div>
@@ -222,3 +222,4 @@ function MiniFact({ icon: Icon, label, value }: { icon: React.ElementType; label
     </div>
   );
 }
+
