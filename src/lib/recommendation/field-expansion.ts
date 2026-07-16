@@ -8,6 +8,14 @@ const relations: Array<{ anchors: RegExp; terms: Array<[string,string,FieldRelat
     ["Museum Management","en","highly_related"],["Gallery Management","en","highly_related"],["Heritage Management","en","highly_related"],
     ["Cultural Entrepreneurship","en","highly_related"],["Management culturel","fr","synonym"],["Industries créatives et culturelles","fr","highly_related"],
   ],
+}, {
+  anchors: /法学|法律|\blaw\b|llm|master of laws/i,
+  terms: [
+    ["Law","en","synonym"],["LLM","en","synonym"],["Master of Laws","en","synonym"],
+    ["International Law","en","highly_related"],["Business Law","en","highly_related"],["Commercial Law","en","highly_related"],
+    ["European Law","en","highly_related"],["Human Rights Law","en","highly_related"],["Droit","fr","synonym"],
+    ["Droit international","fr","highly_related"],["Droit des affaires","fr","highly_related"],
+  ],
 }];
 
 export function expandField(targetField: string | null): FieldExpansion[] {
@@ -23,5 +31,4 @@ export function relationAllowed(relation: FieldRelation, preference: "related_on
   if (preference === "adjacent") return relation !== "cross_discipline";
   return relation === "synonym" || relation === "highly_related";
 }
-
 

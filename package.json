@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run test:planning && next build",
+    "build": "npm run test:planning && npm run test:recommendation && next build",
     "start": "next start",
     "lint": "eslint .",
-    "test:planning": "tsx --test src/lib/planning-report.test.ts"
+    "test:planning": "tsx --test src/lib/planning-report.test.ts",
+    "test:recommendation": "tsx --test src/lib/recommendation/orchestrator.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.1",
@@ -28,3 +29,4 @@
     "tsx": "^4.20.6"
   }
 }
+

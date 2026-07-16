@@ -46,6 +46,7 @@ export type StudentProfile = {
   internships: WorkExperience[];
   targetCountries: string[];
   targetSubjects: string[];
+  targetDegreeLevel: "本科" | "硕士" | "博士" | null;
   targetIntake: { year: number | null; term: "spring" | "summer" | "fall" | null };
   maxAnnualTuition: number | null;
   tuitionCurrency: string | null;
@@ -66,6 +67,7 @@ export const emptyStudentProfile: StudentProfile = {
   internships: [],
   targetCountries: [],
   targetSubjects: [],
+  targetDegreeLevel: null,
   targetIntake: { year: null, term: null },
   maxAnnualTuition: null,
   tuitionCurrency: null,
@@ -108,6 +110,7 @@ export function normalizeStudentProfile(raw: Record<string, unknown> | null | un
     internships: Array.isArray(raw.internships) ? raw.internships as WorkExperience[] : [],
     targetCountries: Array.isArray(raw.targetCountries) ? raw.targetCountries.filter((x): x is string => typeof x === "string") : [],
     targetSubjects: Array.isArray(raw.targetSubjects) ? raw.targetSubjects.filter((x): x is string => typeof x === "string") : [],
+    targetDegreeLevel: raw.targetDegreeLevel === "本科" || raw.targetDegreeLevel === "硕士" || raw.targetDegreeLevel === "博士" ? raw.targetDegreeLevel : null,
     targetIntake: { year: nullableNumber(intake?.year), term: intake?.term === "spring" || intake?.term === "summer" || intake?.term === "fall" ? intake.term : null },
     maxAnnualTuition: nullableNumber(raw.maxAnnualTuition ?? raw.budgetMax), tuitionCurrency: nullableString(raw.tuitionCurrency) ?? (raw.budgetMax ? "GBP" : null),
     preferredCities: Array.isArray(raw.preferredCities) ? raw.preferredCities.filter((x): x is string => typeof x === "string") : [],
@@ -123,7 +126,7 @@ export function readStudentProfile(): StudentProfile {
 }
 export function validateStudentProfile(profile: StudentProfile) {
   const primary = profile.educationHistory[0];
-  const missing = [!profile.name && "姓名", !primary?.institutionNameEn && !primary?.institutionNameZh && "学校", !primary?.major && "专业", !profile.targetCountries.length && "目标国家", !profile.targetSubjects.length && "目标专业"].filter(Boolean);
+  const missing = [!profile.name && "姓名", !primary?.institutionNameEn && !primary?.institutionNameZh && "学校", !primary?.major && "专业", !profile.targetCountries.length && "目标国家", !profile.targetSubjects.length && "目标专业", !profile.targetDegreeLevel && "目标学历层级"].filter(Boolean);
   if (missing.length) throw new Error(`请填写：${missing.join("、")}`);
   for (const score of [primary.arithmeticAverage, primary.weightedAverage, primary.officialAverage]) if (score !== null && (score < 0 || score > 100)) throw new Error("均分应在 0–100 之间");
   return profile;

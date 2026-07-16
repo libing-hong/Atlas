@@ -1,17 +1,46 @@
-import type { SchoolRecommendation } from "../application-prototype-data"; import type { StudentProfile } from "../student-profile"; import { expandField,relationAllowed } from "./field-expansion"; import { assessEligibility } from "./eligibility"; import { OfficialWebDiscoveryProvider,type ProgrammeDiscoveryProvider } from "./programme-discovery"; import { understandProfile } from "./profile-understanding"; import { verifyOfficialProgramme } from "./official-verification"; import type { DiscoveredProgramme,OrchestratorEvent,OrchestratorResult } from "./types"; import { searchCachedOfficialDiscoveries } from "./programme-repository";
-const event=(stage:OrchestratorEvent["stage"],label:string,status:OrchestratorEvent["status"],detail?:string):OrchestratorEvent=>({stage,label,status,detail});
-export async function orchestrateRecommendations(input:{profile:StudentProfile;internalProgrammes?:SchoolRecommendation[];plannedApplicationCount?:number;discoveryProvider?:ProgrammeDiscoveryProvider}):Promise<OrchestratorResult>{
- const events:OrchestratorEvent[]=[]; const profile=understandProfile(input.profile,input.plannedApplicationCount);events.push(event("profile_understanding","已理解学生背景","completed",profile.educationCountry==="英国"?"英国本科按国际/英国学历规则评估，不使用中国院校规则。":undefined));
- const expansions=expandField(profile.targetField);events.push(event("field_expansion","已完成专业语义扩展","completed",`${expansions.length} 个多语言检索词`));
- const cached=searchCachedOfficialDiscoveries(profile,expansions); const internal:DiscoveredProgramme[]=[...(input.internalProgrammes??[]).filter(p=>profile.targetCountries.includes(p.country)).map(p=>({institution:p.universityName,programme:p.programName,officialUrl:p.officialProgramUrl??"",fieldRelation:"adjacent" as const,discoveryQuery:"internal",discoveredAt:new Date().toISOString()})).filter(p=>p.officialUrl),...cached];events.push(event("internal_search","已检索内部数据库","completed",`${internal.length} 个正式候选`));
- const niche=expansions.length>=8; const countryCoverageLow=profile.targetCountries.some(x=>["法国","France"].includes(x))&&internal.length<profile.plannedApplicationCount; const trigger=internal.length<profile.plannedApplicationCount||internal.length/Math.max(profile.plannedApplicationCount,1)<.75||niche||countryCoverageLow;
- let discovered:DiscoveredProgramme[]=[];let passes=0;const provider=input.discoveryProvider??new OfficialWebDiscoveryProvider(); if(trigger){events.push(event("programme_discovery","正在检索相关项目","running"));discovered=await provider.discover(profile,expansions,Math.max(profile.plannedApplicationCount*3,12));passes++;events.push(event("programme_discovery","已完成外部官方项目发现","completed",`${discovered.length} 个候选`))}
- let pool=[...internal,...discovered].filter((p,i,a)=>relationAllowed(p.fieldRelation,profile.crossDisciplinePreference)&&a.findIndex(x=>x.officialUrl===p.officialUrl)===i);events.push(event("official_verification","正在核验官方录取要求","running")); let verified=await Promise.all(pool.map(verifyOfficialProgramme));events.push(event("official_verification","已完成首轮官方核验","completed",`${verified.length} 个项目`));
- let candidates=verified.map(p=>assessEligibility(profile,p)); const issues:string[]=[]; if(candidates.length<profile.plannedApplicationCount)issues.push("推荐数量不足"); if(!profile.targetCountries.length)issues.push("目标国家未提供"); if(expansions.length<2)issues.push("专业同义词覆盖不足"); if(candidates.some(x=>x.verificationStatus!=="verified"))issues.push("存在待核验信息"); if(candidates.some(x=>x.recommendationBand==="currently_not_suitable"&&!Object.values({a:x.academicStatus,l:x.languageStatus,b:x.budgetStatus,t:x.timelineStatus}).includes("does_not_meet")))issues.push("未知被错误判断为不符合");
- if(candidates.length<profile.plannedApplicationCount&&passes<2){events.push(event("supervisor","Supervisor 要求扩大检索","running","首轮候选不足"));const more=await provider.discover(profile,expansions,profile.plannedApplicationCount*5);passes++;pool=[...pool,...more].filter((p,i,a)=>relationAllowed(p.fieldRelation,profile.crossDisciplinePreference)&&a.findIndex(x=>x.officialUrl===p.officialUrl)===i);verified=await Promise.all(pool.map(verifyOfficialProgramme));candidates=verified.map(p=>assessEligibility(profile,p));}
- candidates.sort((a,b)=>a.recommendationBand==="currently_not_suitable"?1:b.recommendationBand==="currently_not_suitable"?-1:b.score-a.score);events.push(event("ranking","已完成核验的推荐","completed",`${candidates.length} 个项目`));events.push(event("supervisor","Supervisor 已完成结果检查","completed"));events.push(event("complete","推荐流程完成","completed"));return{profile,expansions,candidates,events,supervisor:{sufficient:candidates.length>=profile.plannedApplicationCount,issues,discoveryPasses:passes}};
+import type { SchoolRecommendation } from "../application-prototype-data";
+import type { StudentProfile } from "../student-profile";
+import { expandField, relationAllowed } from "./field-expansion";
+import { assessEligibility, validateProgrammeForDisplay } from "./eligibility";
+import { OfficialWebDiscoveryProvider, type ProgrammeDiscoveryProvider } from "./programme-discovery";
+import { understandProfile } from "./profile-understanding";
+import { verifyProgrammeLead } from "./official-verification";
+import type { OrchestratorEvent, OrchestratorResult, ProgrammeLead, RejectedProgrammeLead } from "./types";
+import { searchCachedOfficialDiscoveries } from "./programme-repository";
+
+const event = (stage: OrchestratorEvent["stage"], label: string, status: OrchestratorEvent["status"], detail?: string): OrchestratorEvent => ({ stage, label, status, detail });
+const internalLead = (programme: SchoolRecommendation): ProgrammeLead | null => programme.officialProgramUrl ? { url: programme.officialProgramUrl, searchTitle: programme.programName, snippet: null, entityType: "official_programme", fieldRelation: "adjacent", discoveryQuery: "internal verified database", discoveredAt: new Date().toISOString() } : null;
+
+function deduplicate(leads: ProgrammeLead[], reviewQueue: RejectedProgrammeLead[]) {
+  const seen = new Set<string>(); const unique: ProgrammeLead[] = [];
+  for (const lead of leads) { const key = lead.url.replace(/\/$/, "").toLowerCase(); if (seen.has(key)) reviewQueue.push({ lead, reasons: ["DUPLICATE_RESULT"] }); else { seen.add(key); unique.push(lead); } }
+  return unique;
 }
 
+async function verifyLeads(leads: ProgrammeLead[], profile: ReturnType<typeof understandProfile>, reviewQueue: RejectedProgrammeLead[]) {
+  const outcomes = await Promise.all(leads.map(lead => verifyProgrammeLead(lead, profile))); for (const outcome of outcomes) if (outcome.rejection) reviewQueue.push(outcome.rejection); return outcomes.flatMap(outcome => outcome.programme ? [outcome.programme] : []);
+}
 
-
+export async function orchestrateRecommendations(input: { profile: StudentProfile; internalProgrammes?: SchoolRecommendation[]; plannedApplicationCount?: number; discoveryProvider?: ProgrammeDiscoveryProvider }): Promise<OrchestratorResult> {
+  const events: OrchestratorEvent[] = []; const reviewQueue: RejectedProgrammeLead[] = []; const profile = understandProfile(input.profile, input.plannedApplicationCount);
+  events.push(event("profile_understanding", "已理解学生背景", "completed", profile.educationCountry === "英国" ? "英国本科按国际/英国学历规则评估，不使用中国院校规则。" : undefined));
+  const expansions = expandField(profile.targetField); events.push(event("field_expansion", "已完成专业语义扩展", "completed", `${expansions.length} 个多语言检索词`));
+  const internal = [...(input.internalProgrammes ?? []).filter(programme => profile.targetCountries.includes(programme.country)).map(internalLead).filter((lead): lead is ProgrammeLead => Boolean(lead)), ...searchCachedOfficialDiscoveries(profile, expansions)];
+  events.push(event("internal_search", "已检索内部数据库", "completed", `${internal.length} 条项目线索`));
+  const niche = expansions.length >= 8; const coverageLow = internal.length / Math.max(profile.plannedApplicationCount, 1) < .75; const trigger = internal.length < profile.plannedApplicationCount || coverageLow || niche;
+  const provider = input.discoveryProvider ?? new OfficialWebDiscoveryProvider(); let discovered: ProgrammeLead[] = []; let passes = 0;
+  if (trigger) { events.push(event("programme_discovery", "正在检索相关项目", "running")); discovered = await provider.discover(profile, expansions, Math.max(profile.plannedApplicationCount * 4, 16)); passes++; events.push(event("programme_discovery", "已完成项目线索发现", "completed", `${discovered.length} 条线索；尚未面向用户展示`)); }
+  let leads = deduplicate([...internal, ...discovered].filter(lead => relationAllowed(lead.fieldRelation, profile.crossDisciplinePreference)), reviewQueue);
+  events.push(event("entity_verification", "正在验证学校与项目实体", "running")); let verified = await verifyLeads(leads, profile, reviewQueue); events.push(event("official_verification", "已完成官方来源核验", "completed", `${verified.length} 个项目通过严格验证，${reviewQueue.length} 条线索进入后台复核`));
+  let candidates = verified.map(programme => assessEligibility(profile, programme)).filter(candidate => validateProgrammeForDisplay(candidate, profile));
+  if (candidates.length < profile.plannedApplicationCount && passes < 2) {
+    events.push(event("supervisor", "Supervisor 要求扩大官方检索", "running", "严格过滤后项目数量不足，绝不使用文章或商城页面补位"));
+    const more = await provider.discover(profile, expansions, Math.max(profile.plannedApplicationCount * 6, 24)); passes++; leads = deduplicate([...leads, ...more].filter(lead => relationAllowed(lead.fieldRelation, profile.crossDisciplinePreference)), reviewQueue); verified = await verifyLeads(leads, profile, reviewQueue); candidates = verified.map(programme => assessEligibility(profile, programme)).filter(candidate => validateProgrammeForDisplay(candidate, profile));
+  }
+  const finalSeen = new Set<string>(); candidates = candidates.filter(candidate => { const key = `${candidate.institutionName}|${candidate.programmeName}|${candidate.country}|${candidate.degreeLevel}`.toLowerCase(); if (finalSeen.has(key)) { reviewQueue.push({ lead: { url: candidate.officialProgrammeUrl, searchTitle: candidate.programmeName, snippet: null, entityType: "official_programme", fieldRelation: candidate.fieldRelation, discoveryQuery: "supervisor deduplication", discoveredAt: new Date().toISOString() }, reasons: ["DUPLICATE_RESULT"] }); return false; } finalSeen.add(key); return true; });
+  candidates.sort((a, b) => a.recommendationBand === "currently_not_suitable" ? 1 : b.recommendationBand === "currently_not_suitable" ? -1 : b.score - a.score);
+  const issues: string[] = []; if (candidates.length < profile.plannedApplicationCount) issues.push("当前已核验项目不足，Atlas 正在继续检索官方项目"); if (!profile.targetDegreeLevel) issues.push("目标学历层级待确认"); if (candidates.some(candidate => !profile.targetCountries.includes(candidate.country))) issues.push("存在目标国家外项目"); if (candidates.some(candidate => !validateProgrammeForDisplay(candidate, profile))) issues.push("存在未通过展示验证的结果");
+  events.push(event("ranking", "已完成核验的推荐", "completed", `${candidates.length} 个项目`)); events.push(event("supervisor", "Supervisor 已完成结果检查", "completed", issues[0])); events.push(event("complete", "推荐流程完成", "completed"));
+  return { profile, expansions, candidates, reviewQueue, events, supervisor: { sufficient: candidates.length >= profile.plannedApplicationCount, issues, discoveryPasses: passes } };
+}
 
