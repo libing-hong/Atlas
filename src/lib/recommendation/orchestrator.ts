@@ -27,7 +27,7 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
   const expansions = expandField(profile.targetField); events.push(event("field_expansion", "已完成专业语义扩展", "completed", `${expansions.length} 个多语言检索词`));
   const internal = [...(input.internalProgrammes ?? []).filter(programme => profile.targetCountries.includes(programme.country)).map(internalLead).filter((lead): lead is ProgrammeLead => Boolean(lead)), ...searchCachedOfficialDiscoveries(profile, expansions)];
   events.push(event("internal_search", "已检索内部数据库", "completed", `${internal.length} 条项目线索`));
-  const niche = expansions.length >= 8; const coverageLow = internal.length / Math.max(profile.plannedApplicationCount, 1) < .75; const trigger = internal.length < profile.plannedApplicationCount || coverageLow || niche;
+  const niche = expansions.length >= 8; const coverageLow = internal.length / Math.max(profile.plannedApplicationCount, 1) < .75; const trigger = internal.length < profile.plannedApplicationCount || coverageLow || (niche && internal.length === 0);
   const provider = input.discoveryProvider ?? new OfficialWebDiscoveryProvider(); let discovered: ProgrammeLead[] = []; let passes = 0;
   if (trigger) { events.push(event("programme_discovery", "正在检索相关项目", "running")); discovered = await provider.discover(profile, expansions, Math.max(profile.plannedApplicationCount * 4, 16)); passes++; events.push(event("programme_discovery", "已完成项目线索发现", "completed", `${discovered.length} 条线索；尚未面向用户展示`)); }
   let leads = deduplicate([...internal, ...discovered].filter(lead => relationAllowed(lead.fieldRelation, profile.crossDisciplinePreference)), reviewQueue);

@@ -29,22 +29,22 @@ export class OfficialWebDiscoveryProvider implements ProgrammeDiscoveryProvider 
   async discover(profile: UnderstoodProfile, terms: FieldExpansion[], limit: number) {
     const countries = profile.targetCountries.map(country => countryNames[country] ?? country).join(" OR ");
     const level = profile.targetDegreeLevel === "bachelor" ? "bachelor" : profile.targetDegreeLevel === "doctorate" ? "PhD" : "master MSc MA LLM";
-    const queries = terms.slice(0, 10).map(term => `site:.edu OR site:.ac.uk OR site:.fr OR site:.edu.au "${term.term}" (${countries}) ${level} admissions`);
-    const leads: ProgrammeLead[] = [];
-    for (const query of queries) {
+    const queries = terms.slice(0, 6).map(term => `site:.edu OR site:.ac.uk OR site:.fr OR site:.edu.au "${term.term}" (${countries}) ${level} admissions`);
+    const batches = await Promise.all(queries.map(async (query): Promise<ProgrammeLead[]> => {
       if (process.env.PROGRAMME_SEARCH_API_URL) {
-        const response = await fetch(process.env.PROGRAMME_SEARCH_API_URL, { method: "POST", headers: { "Content-Type": "application/json", ...(process.env.PROGRAMME_SEARCH_API_KEY ? { Authorization: `Bearer ${process.env.PROGRAMME_SEARCH_API_KEY}` } : {}) }, body: JSON.stringify({ query, limit }), cache: "no-store", signal: AbortSignal.timeout(9000) }).catch(() => null);
+        const response = await fetch(process.env.PROGRAMME_SEARCH_API_URL, { method: "POST", headers: { "Content-Type": "application/json", ...(process.env.PROGRAMME_SEARCH_API_KEY ? { Authorization: `Bearer ${process.env.PROGRAMME_SEARCH_API_KEY}` } : {}) }, body: JSON.stringify({ query, limit }), cache: "no-store", signal: AbortSignal.timeout(6000) }).catch(() => null);
         if (response?.ok) {
           const payload = await response.json() as { results?: SearchResult[] };
-          for (const result of payload.results ?? []) if (leads.length < limit) leads.push(toLead(result, query, terms));
-          continue;
+          return (payload.results ?? []).slice(0, limit).map(result => toLead(result, query, terms));
         }
       }
-      const response = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, { headers: { "User-Agent": "AtlasProgrammeDiscovery/2.0" }, cache: "no-store", signal: AbortSignal.timeout(9000) }).catch(() => null);
-      if (!response?.ok) continue;
-      const html = await response.text(); const pattern = /<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi; let match: RegExpExecArray | null;
+      const response = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, { headers: { "User-Agent": "AtlasProgrammeDiscovery/2.0" }, cache: "no-store", signal: AbortSignal.timeout(6000) }).catch(() => null);
+      if (!response?.ok) return [];
+      const leads: ProgrammeLead[] = []; const html = await response.text(); const pattern = /<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi; let match: RegExpExecArray | null;
       while ((match = pattern.exec(html)) && leads.length < limit) { let url = decode(match[1]); try { const redirect = new URL(url, "https://duckduckgo.com"); url = redirect.searchParams.get("uddg") ?? url; } catch {} leads.push(toLead({ url, title: decode(match[2]) }, query, terms)); }
-    }
+      return leads;
+    }));
+    const leads = batches.flat().slice(0, limit);
     return leads.filter((lead, index, all) => all.findIndex(other => other.url === lead.url) === index);
   }
 }
