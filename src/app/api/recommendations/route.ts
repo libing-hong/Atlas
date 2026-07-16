@@ -1,22 +1,4 @@
-import { NextResponse } from "next/server";
-import { recommendations } from "@/lib/application-prototype-data";
-import { buildProgramPortfolio } from "@/lib/program-matching";
-import { normalizeStudentProfile } from "@/lib/student-profile";
-
-export async function POST(request: Request) {
-  try {
-    const submitted = await request.json() as Record<string, unknown>;
-    const profile = normalizeStudentProfile(submitted);
-    const matches = buildProgramPortfolio(profile, recommendations).map(({ school, result }) => ({
-      programId: school.id,
-      universityId: school.universityId,
-      universityName: school.universityName,
-      programName: school.programName,
-      result
-    }));
-    return NextResponse.json({ matches, disclaimer: "Atlas 方案匹配度用于帮助排序申请方案，不代表学校录取概率。" });
-  } catch {
-    return NextResponse.json({ message: "学生背景格式无法识别，请检查后重新提交。" }, { status: 400 });
-  }
-}
+import { NextResponse } from "next/server"; import { recommendations } from "@/lib/application-prototype-data"; import { normalizeStudentProfile } from "@/lib/student-profile"; import { orchestrateRecommendations } from "@/lib/recommendation/orchestrator";
+export const maxDuration=60;
+export async function POST(request:Request){try{const body=await request.json() as {profile?:Record<string,unknown>;plannedApplicationCount?:number};const profile=normalizeStudentProfile(body.profile??body as Record<string,unknown>);const result=await orchestrateRecommendations({profile,internalProgrammes:recommendations,plannedApplicationCount:body.plannedApplicationCount??6});return NextResponse.json({...result,disclaimer:"所有推荐来自内部检索或外部官方发现；待核验字段不会被推测，也不代表录取概率。"})}catch(error){return NextResponse.json({message:error instanceof Error?error.message:"推荐流程暂时不可用"},{status:500})}}
 
