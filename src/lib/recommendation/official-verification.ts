@@ -38,12 +38,16 @@ function extractInstitution(records: Record<string, unknown>[], body: string) {
     const name = cleanName(record.name);
     if (name && recordTypes.some(type => /CollegeOrUniversity|EducationalOrganization|Organization/i.test(type)) && /university|universit[eé]|school|college|école|institute|institut/i.test(name)) return normalizeInstitutionName(name, body);
   }
-  return null;
+  const universityPatterns = [/(The\s+University\s+of\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ&'’ -]{2,55})/, /(University\s+College\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ&'’ -]{2,45})/, /(Université\s+(?:de\s+|Paris-)?[A-ZÀ-Ý][A-Za-zÀ-ÿ&'’ -]{2,70})/, /([A-ZÀ-Ý][A-Za-zÀ-ÿ&'’-]{2,35}\s+University)/];
+  let institution: string | undefined; for (const pattern of universityPatterns) { institution = body.match(pattern)?.[1]; if (institution) break; }
+  const schoolMatch = body.match(/([A-Z][A-Za-z&'’ -]{2,45}\s+(?:Business\s+)?School)/); institution ??= schoolMatch?.[1];
+  return institution ? institution.replace(/['’]s\s+Law School.*$/i, "").replace(/\s+(?:Skip|Aller|Menu|Admissions?|Study|Home|Faculté|Faculty|Courses?|Search|International).*$/i, "").trim() : null;
 }
 
-function extractProgramme(records: Record<string, unknown>[], html: string) {
+function extractProgramme(records: Record<string, unknown>[], html: string, body: string) {
   for (const record of records) { if (types(record["@type"]).some(type => /Course|EducationalOccupationalProgram/i.test(type))) { const name = cleanName(record.name); if (name) return name; } }
-  const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]; return h1 ? cleanName(h1) : null;
+  const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]; const h1Name = h1 ? cleanName(h1) : null; if (h1Name) return h1Name;
+  return first(body, [/\b((?:LLM|Master(?: of Laws)?|MSc|MA)\s+(?:in\s+)?(?:Law|Laws|Droit)[A-Za-zÀ-ÿ&'’ -]{0,70})/i]);
 }
 
 function extractStructuredCountry(records: Record<string, unknown>[]) {
@@ -65,8 +69,8 @@ export async function verifyProgrammeLead(lead: ProgrammeLead, profile: Understo
   const response = await fetch(lead.url, { headers: { "User-Agent": "AtlasOfficialVerifier/2.0" }, cache: "no-store", signal: AbortSignal.timeout(12000) }).catch(() => null);
   if (!response?.ok) return { rejection: { lead, reasons: ["PROGRAMME_NOT_VERIFIED"] } };
   const finalUrl = response.url || lead.url; const finalParsed = new URL(finalUrl); const html = await response.text(); const body = plainText(html); const records = structuredData(html);
-  const institutionName = extractInstitution(records, body); const programmeName = extractProgramme(records, html); const officialRootDomain = rootDomain(finalParsed.hostname);
-  const country = extractStructuredCountry(records) ?? canonicalCountry(`${finalParsed.hostname} ${body.slice(0, 12000)}`);
+  const institutionName = extractInstitution(records, body); const programmeName = extractProgramme(records, html, body); const officialRootDomain = rootDomain(finalParsed.hostname);
+  const country = finalParsed.hostname.endsWith(".ac.uk") ? "英国" : finalParsed.hostname.endsWith(".edu.au") ? "澳洲" : finalParsed.hostname.endsWith(".fr") ? "法国" : extractStructuredCountry(records) ?? canonicalCountry(`${finalParsed.hostname} ${body.slice(0, 12000)}`);
   const institutionVerified = Boolean(institutionName && officialRootDomain && !blockedDomain.test(finalParsed.hostname));
   const institutionVerification: InstitutionVerification = { institutionVerified, institutionName, country, officialRootDomain };
   if (!institutionName) reasons.push("MISSING_INSTITUTION_NAME");

@@ -9,6 +9,50 @@
     "discoveredAt": "2026-07-16T21:00:00.000Z",
     "sourceType": "external_official_discovery",
     "verificationStatus": "partially_verified"
+  },
+  {
+    "institution": "University College London",
+    "programme": "Law LLM",
+    "officialUrl": "https://www.ucl.ac.uk/prospective-students/graduate/taught-degrees/law-llm",
+    "countries": ["英国", "United Kingdom"],
+    "fieldTerms": ["Law", "LLM", "Master of Laws", "International Law", "Business Law", "Commercial Law", "European Law", "Human Rights Law"],
+    "discoveryQuery": "official web discovery: site:ucl.ac.uk Law LLM admissions",
+    "discoveredAt": "2026-07-17T10:00:00.000Z",
+    "sourceType": "external_official_discovery",
+    "verificationStatus": "verified"
+  },
+  {
+    "institution": "The University of Edinburgh",
+    "programme": "LLM in Law",
+    "officialUrl": "https://www.law.ed.ac.uk/study/masters-degrees/llm-law",
+    "countries": ["英国", "United Kingdom"],
+    "fieldTerms": ["Law", "LLM", "Master of Laws", "International Law", "Business Law", "Commercial Law", "European Law", "Human Rights Law"],
+    "discoveryQuery": "official web discovery: site:ed.ac.uk LLM Law admissions",
+    "discoveredAt": "2026-07-17T10:00:00.000Z",
+    "sourceType": "external_official_discovery",
+    "verificationStatus": "verified"
+  },
+  {
+    "institution": "Université de Strasbourg",
+    "programme": "Master Droit international",
+    "officialUrl": "https://droit.unistra.fr/formation/diplomes-detat/master/mentions-et-parcours-masters/droit-international/",
+    "countries": ["法国", "France"],
+    "fieldTerms": ["Law", "Master of Laws", "International Law", "European Law", "Droit", "Droit international"],
+    "discoveryQuery": "official web discovery: site:unistra.fr Master Droit international admission",
+    "discoveredAt": "2026-07-17T10:00:00.000Z",
+    "sourceType": "external_official_discovery",
+    "verificationStatus": "verified"
+  },
+  {
+    "institution": "Université Paris-Panthéon-Assas",
+    "programme": "Master Droit international",
+    "officialUrl": "https://www.assas-universite.fr/fr/master-droit-international-parcours-administration-internationale",
+    "countries": ["法国", "France"],
+    "fieldTerms": ["Law", "Master of Laws", "International Law", "European Law", "Droit", "Droit international"],
+    "discoveryQuery": "official web discovery: site:assas-universite.fr Master Droit international admission",
+    "discoveredAt": "2026-07-17T10:00:00.000Z",
+    "sourceType": "external_official_discovery",
+    "verificationStatus": "verified"
   }
 ]
 
