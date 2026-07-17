@@ -33,7 +33,7 @@ export class SchoolRecommendationError extends Error {
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new SchoolRecommendationError("OPENAI_API_KEY_MISSING");
-  return new OpenAI({ apiKey });
+  return new OpenAI({ apiKey, timeout: 105_000, maxRetries: 1 });
 }
 
 export function normalizeOpenAIError(error: unknown): SchoolRecommendationError {
@@ -71,7 +71,7 @@ export class OpenAIRecommendationProvider implements AIRecommendationProvider {
   async generate(profile: ApplicantProfile, relaxed = false) {
     const instructions = `You are Atlas's university programme planning engine. Return 10-20 real, specific university degree programmes suitable for the applicant. Only use countries in targetCountries. School and programme names must be separate. Never return books, articles, rankings, marketplaces, training courses, aggregators, or non-higher-education institutions. Do not require an Atlas database match. Uncertain but plausible programmes may be returned with low confidence and verification queries. Expand subject semantics where useful.${relaxed ? " Use broader related subject names while preserving countries and degree level." : ""}`;
     try {
-      const response = await getOpenAIClient().responses.create({ model: RECOMMENDATION_MODEL, instructions, input: JSON.stringify(profile), text: { format: { type: "json_schema", name: "atlas_programme_recommendations", strict: true, schema } } });
+      const response = await getOpenAIClient().responses.create({ model: RECOMMENDATION_MODEL, reasoning: { effort: "low" }, max_output_tokens: 12_000, instructions, input: JSON.stringify(profile), text: { format: { type: "json_schema", name: "atlas_programme_recommendations", strict: true, schema } } });
       if (!response.output_text) throw new SchoolRecommendationError("OPENAI_INVALID_RESPONSE");
       try {
         const recommendations = (JSON.parse(response.output_text) as { recommendations?: AIProgramRecommendation[] }).recommendations;
