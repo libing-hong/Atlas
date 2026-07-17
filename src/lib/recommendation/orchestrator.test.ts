@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { classifyProgrammeLead } from "./programme-discovery";
 import { expandField } from "./field-expansion";
 import { validateProgrammeForDisplay } from "./eligibility";
+import { retrieveCachedVerifiedProgrammes } from "./programme-repository";
+import { understandProfile } from "./profile-understanding";
+import { normalizeStudentProfile } from "../student-profile";
 import type { ProgrammeCandidate, UnderstoodProfile, VerifiedProgramme } from "./types";
 
 const verifiedProgramme: VerifiedProgramme = {
@@ -22,5 +25,38 @@ test("display validator enforces country, degree, names and official source", ()
   assert.equal(validateProgrammeForDisplay({ ...candidate, country: "美国", verifiedProgramme: { ...verifiedProgramme, country: "美国" } }, profile), false);
   assert.equal(validateProgrammeForDisplay({ ...candidate, programmeName: "" }, profile), false);
   assert.equal(validateProgrammeForDisplay({ ...candidate, degreeLevel: "bachelor", verifiedProgramme: { ...verifiedProgramme, degreeLevel: "bachelor" } }, profile), false);
+});
+
+function understood(countries: string[], subject: string, languageTests: unknown[] = [], budget: number | null = null) {
+  return understandProfile(normalizeStudentProfile({ targetCountries: countries, targetSubjects: [subject], targetDegreeLevel: "硕士", languageTests, maxAnnualTuition: budget, tuitionCurrency: "EUR" }));
+}
+
+test("France and UK arts management retrieves related official programmes without US results", () => {
+  const value = understood(["法国", "英国"], "艺术管理");
+  const results = retrieveCachedVerifiedProgrammes(value, expandField(value.targetField));
+  assert.ok(results.some(item => item.institutionName === "KEDGE Business School"));
+  assert.ok(results.every(item => value.targetCountries.includes(item.country)));
+});
+
+test("France law retrieves real law programmes with distinct institution and programme names", () => {
+  const value = understood(["法国"], "法学");
+  const results = retrieveCachedVerifiedProgrammes(value, expandField(value.targetField));
+  assert.ok(results.length >= 2);
+  assert.ok(results.every(item => item.institutionName !== item.programmeName && item.officialProgrammeUrl.startsWith("https://")));
+});
+
+test("missing language scores do not remove cached programmes", () => {
+  const value = understood(["英国"], "法学");
+  assert.ok(retrieveCachedVerifiedProgrammes(value, expandField(value.targetField)).length > 0);
+});
+
+test("a school remains available without an overall QS ranking", () => {
+  const value = understood(["法国"], "艺术管理");
+  assert.ok(retrieveCachedVerifiedProgrammes(value, expandField(value.targetField)).some(item => item.institutionName === "KEDGE Business School"));
+});
+
+test("a low budget does not remove programmes at retrieval", () => {
+  const value = understood(["法国"], "艺术管理", [], 1000);
+  assert.ok(retrieveCachedVerifiedProgrammes(value, expandField(value.targetField)).length > 0);
 });
 
