@@ -6,6 +6,7 @@ import { validateProgrammeForDisplay } from "./eligibility";
 import { retrieveCachedVerifiedProgrammes } from "./programme-repository";
 import { understandProfile } from "./profile-understanding";
 import { normalizeStudentProfile } from "../student-profile";
+import { aiRecommendationToCandidate, buildApplicantProfile, type AIProgramRecommendation } from "./ai-recommendation";
 import type { ProgrammeCandidate, UnderstoodProfile, VerifiedProgramme } from "./types";
 
 const verifiedProgramme: VerifiedProgramme = {
@@ -58,5 +59,21 @@ test("a school remains available without an overall QS ranking", () => {
 test("a low budget does not remove programmes at retrieval", () => {
   const value = understood(["法国"], "艺术管理", [], 1000);
   assert.ok(retrieveCachedVerifiedProgrammes(value, expandField(value.targetField)).length > 0);
+});
+
+test("AI programmes missing from Atlas remain visible as pending verification", () => {
+  const item: AIProgramRecommendation = { schoolName:"Example University",schoolNameLocal:null,programName:"MA Arts Management",programNameLocal:null,country:"英国",city:"London",degreeLevel:"master",subjectArea:"Arts Management",category:"target",estimatedFitScore:78,recommendationReasons:["专业方向匹配"],applicantStrengths:["相关本科背景"],admissionConcerns:[],missingRequirements:["语言成绩"],verificationQueries:["site:example.ac.uk MA Arts Management"],expectedOfficialDomain:"example.ac.uk",possibleOfficialUrl:null,confidence:.7 };
+  const result = aiRecommendationToCandidate(item);
+  assert.equal(result.generatedByAI, true);
+  assert.equal(result.verificationStatus, "pending");
+  assert.equal(validateProgrammeForDisplay(result, { targetCountries:["英国"], targetDegreeLevel:"master" } as UnderstoodProfile), true);
+});
+
+test("applicant profile sends facts Atlas already knows without inventing missing scores", () => {
+  const raw = normalizeStudentProfile({ targetCountries:["法国","英国"],targetSubjects:["艺术管理"],targetDegreeLevel:"硕士",educationHistory:[{id:"durham",country:"英国",institutionNameEn:"Durham University",major:"Arts",degreeLevel:"本科",arithmeticAverage:72}],languageTests:[] });
+  const result = buildApplicantProfile(raw, understandProfile(raw));
+  assert.equal(result.currentInstitution, "Durham University");
+  assert.equal(result.gradeNormalized, 72);
+  assert.ok(result.missingInformation.includes("languageScores"));
 });
 
