@@ -6,7 +6,7 @@ import { validateProgrammeForDisplay } from "./eligibility";
 import { retrieveCachedVerifiedProgrammes } from "./programme-repository";
 import { understandProfile } from "./profile-understanding";
 import { normalizeStudentProfile } from "../student-profile";
-import { aiRecommendationToCandidate, buildApplicantProfile, type AIProgramRecommendation } from "./ai-recommendation";
+import { aiRecommendationToCandidate, buildApplicantProfile, normalizeOpenAIError, SchoolRecommendationError, type AIProgramRecommendation } from "./ai-recommendation";
 import type { ProgrammeCandidate, UnderstoodProfile, VerifiedProgramme } from "./types";
 
 const verifiedProgramme: VerifiedProgramme = {
@@ -75,5 +75,13 @@ test("applicant profile sends facts Atlas already knows without inventing missin
   assert.equal(result.currentInstitution, "Durham University");
   assert.equal(result.gradeNormalized, 72);
   assert.ok(result.missingInformation.includes("languageScores"));
+});
+
+test("OpenAI errors remain distinguishable without exposing credentials", () => {
+  assert.equal(normalizeOpenAIError({ status:401 }).code, "OPENAI_AUTHENTICATION_FAILED");
+  assert.equal(normalizeOpenAIError({ status:403 }).code, "OPENAI_PERMISSION_DENIED");
+  assert.equal(normalizeOpenAIError({ status:429 }).code, "OPENAI_RATE_LIMITED");
+  assert.equal(normalizeOpenAIError({ status:429, code:"insufficient_quota" }).code, "OPENAI_INSUFFICIENT_QUOTA");
+  assert.equal(normalizeOpenAIError(new SchoolRecommendationError("OPENAI_INVALID_RESPONSE")).code, "OPENAI_INVALID_RESPONSE");
 });
 
