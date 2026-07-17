@@ -39,9 +39,10 @@ export type ProgrammeCandidate = {
   academicStatus: AssessmentStatus; languageStatus: AssessmentStatus; budgetStatus: AssessmentStatus; timelineStatus: AssessmentStatus;
   verificationStatus: VerificationStatus; missingInformation: string[]; sources: SourceEvidence[]; matchExplanation: string;
   recommendationBand: RecommendationBand; score: number; verifiedProgramme: VerifiedProgramme;
+  generatedByAI?: boolean; aiRecommendation?: import("./ai-recommendation").AIProgramRecommendation;
 };
 export type OrchestratorStage = "profile_understanding" | "field_expansion" | "internal_search" | "programme_discovery" | "entity_verification" | "official_verification" | "eligibility_assessment" | "ranking" | "supervisor" | "complete";
 export type OrchestratorEvent = { stage: OrchestratorStage; label: string; status: "running" | "completed"; detail?: string };
-export type RecommendationDebug = { initialCandidates: number; afterCountryFilter: number; afterDegreeFilter: number; afterSubjectMatch: number; afterEligibilityCheck: number; afterValidation: number };
+export type RecommendationDebug = { initialCandidates: number; afterCountryFilter: number; afterDegreeFilter: number; afterSubjectMatch: number; afterEligibilityCheck: number; afterValidation: number; openAIRequestStarted?: boolean; model?: string; promptVersion?: string; aiCandidatesReturned?: number; atlasSchoolMatches?: number; atlasProgramMatches?: number; pendingVerification?: number; verifiedRecommendations?: number; excluded?: number };
 export type OrchestratorResult = { profile: UnderstoodProfile; expansions: FieldExpansion[]; candidates: ProgrammeCandidate[]; reviewQueue: RejectedProgrammeLead[]; events: OrchestratorEvent[]; fallbackLevel: number; emptyReason?: string; debug: RecommendationDebug; supervisor: { sufficient: boolean; issues: string[]; discoveryPasses: number } };
 
