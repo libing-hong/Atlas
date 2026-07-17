@@ -12,7 +12,6 @@ import { getProgramContent, ProgramContentProfile, programKnowledgeFallback, pro
 import { emptyStudentProfile, writeStudentProfile, type StudentProfile } from "@/lib/student-profile";
 import { readActivePlanningRun, readPlanningRun, readRunComparisonSelection, updatePlanningRun, writeRunComparisonSelection } from "@/lib/planning-store";
 import type { OrchestratorEvent, ProgrammeCandidate } from "@/lib/recommendation/types";
-import { validateProgrammeForDisplay } from "@/lib/recommendation/eligibility";
 
 const categoryCopy: Record<RecommendationCategory, { label: string; description: string }> = {
   reach: { label: "冲刺选择", description: "与目标匹配，但录取要求相对较高，需要重点准备申请材料。" },
@@ -40,6 +39,7 @@ export function RecommendationsClient({ runId: requestedRunId }: { runId?: strin
   const [runMissing, setRunMissing] = useState(false);
   const [orchestratorEvents, setOrchestratorEvents] = useState<OrchestratorEvent[]>([]);
   const [programmeCandidates, setProgrammeCandidates] = useState<ProgrammeCandidate[]>([]);
+  const [apiCandidateCount, setApiCandidateCount] = useState(0);
   const [emptyReason, setEmptyReason] = useState("");
   const [discoveryState, setDiscoveryState] = useState<"idle"|"searching"|"verifying"|"complete"|"error">("idle");
   const [targetCountries, setTargetCountries] = useState(profile.targetCountries.join("、"));
@@ -61,10 +61,23 @@ export function RecommendationsClient({ runId: requestedRunId }: { runId?: strin
       cautions: [...result.preparationItems.map((item) => `${item.label}：${item.reason}`), ...result.unresolvedItems, ...(result.category === "currently_not_eligible" ? ["当前未进入主要推荐名单"] : [])],
     },
   })), [profile]);
-  const displayCandidates = useMemo(() => programmeCandidates.filter((candidate) => validateProgrammeForDisplay(candidate)), [programmeCandidates]);
+  // The API has already validated the response. In particular, AI-generated
+  // candidates awaiting Atlas verification must remain visible here.
+  const displayCandidates = programmeCandidates;
   const candidateCategory = (candidate: ProgrammeCandidate): RecommendationCategory => candidate.recommendationBand === "needs_confirmation" ? "manual_review" : candidate.recommendationBand === "currently_not_suitable" ? "currently_not_eligible" : candidate.recommendationBand;
   const visibleCandidates = useMemo(() => category === "all" ? displayCandidates : displayCandidates.filter((candidate) => candidateCategory(candidate) === category), [category, displayCandidates]);
   const candidateRecommendations = useMemo<SchoolRecommendation[]>(() => displayCandidates.map((candidate) => ({ id: candidate.officialProgrammeUrl, universityId: candidate.verifiedProgramme.officialRootDomain, universityName: candidate.institutionName, programName: candidate.programmeName, country: candidate.country, city: candidate.verifiedProgramme.campus.value ?? "待确认", intake: candidate.verifiedProgramme.intake.value ?? "待确认", duration: "待确认", tuition: candidate.verifiedProgramme.tuition.value ?? 0, currency: candidate.verifiedProgramme.tuitionCurrency.value ?? "", deadline: candidate.verifiedProgramme.deadline.value ?? "待确认", deadlineType: "official", category: candidateCategory(candidate), reasons: [candidate.matchExplanation], matchedRequirements: [], risks: candidate.missingInformation, requirements: [], materialsReady: 0, materialsTotal: 0, isSelected: false, isConfirmed: false, officialProgramUrl: candidate.officialProgrammeUrl, applicationUrl: candidate.verifiedProgramme.applicationUrl.value ?? undefined, applicationLinkStatus: candidate.verifiedProgramme.applicationUrl.value ? "verified" : "needs_review", recommendationContent: { summary: candidate.matchExplanation, personalFit: candidate.matchExplanation, schoolHighlights: "学校与官方根域名已验证", programHighlights: `${candidate.degreeLevel} · ${candidate.country}`, cautions: candidate.missingInformation, sources: candidate.sources.map((source) => ({ label: "学校官方项目页", url: source.sourceUrl })) } })), [displayCandidates]);
+
+  useEffect(() => {
+    console.info("[school-recommendation-render]", {
+      apiCandidateCount,
+      stateCandidateCount: programmeCandidates.length,
+      atlasRecommendationCount: displayCandidates.length,
+      afterFilterCount: visibleCandidates.length,
+      renderedCardCount: visibleCandidates.length,
+      activeFilter: category,
+    });
+  }, [apiCandidateCount, category, displayCandidates.length, programmeCandidates.length, visibleCandidates.length]);
 
   useEffect(() => {
     const timer=window.setTimeout(()=>{const run = requestedRunId ? readPlanningRun(requestedRunId) : readActivePlanningRun();
@@ -86,10 +99,10 @@ export function RecommendationsClient({ runId: requestedRunId }: { runId?: strin
 
   useEffect(() => {
     if (!runId || !profile.targetCountries.length || !profile.targetSubjects.length || !profile.targetDegreeLevel) return;
-    let active=true; const controller=new AbortController(); const requestTimeout=window.setTimeout(()=>controller.abort(),70000); const timer=window.setTimeout(()=>{setDiscoveryState("searching"); setOrchestratorEvents([{stage:"programme_discovery",label:"正在检索相关项目",status:"running"}]);
+    let active=true; const controller=new AbortController(); const requestTimeout=window.setTimeout(()=>controller.abort(),125000); const timer=window.setTimeout(()=>{setDiscoveryState("searching"); setCategory("all"); setApiCandidateCount(0); setProgrammeCandidates([]); setOrchestratorEvents([{stage:"programme_discovery",label:"正在检索相关项目",status:"running"}]);
       fetch("/api/recommendations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({profile,plannedApplicationCount:6}),signal:controller.signal})
         .then(async response=>{setDiscoveryState("verifying");const data=await response.json() as {events?:OrchestratorEvent[];candidates?:ProgrammeCandidate[];emptyReason?:string;message?:string};if(!response.ok)throw new Error(data.message??"推荐服务暂时不可用");return data})
-        .then(result=>{if(!active)return;window.clearTimeout(requestTimeout);setOrchestratorEvents(result.events??[]);setProgrammeCandidates(result.candidates??[]);setEmptyReason(result.emptyReason??"");setDiscoveryState("complete")})
+        .then(result=>{if(!active)return;window.clearTimeout(requestTimeout);const candidates=result.candidates??[];console.info("[school-recommendation-fetch]",{apiCandidateCount:candidates.length});setApiCandidateCount(candidates.length);setOrchestratorEvents(result.events??[]);setProgrammeCandidates(candidates);setEmptyReason(result.emptyReason??"");setDiscoveryState("complete")})
         .catch((requestError:unknown)=>{if(active){window.clearTimeout(requestTimeout);setError(requestError instanceof Error?requestError.message:"推荐服务暂时不可用");setDiscoveryState("error")}});},0);
     return()=>{active=false;controller.abort();window.clearTimeout(timer);window.clearTimeout(requestTimeout)};
   },[runId,profile]);
