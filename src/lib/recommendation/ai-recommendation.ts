@@ -1,3 +1,4 @@
+import OpenAI from "openai";
 import type { StudentProfile } from "../student-profile";
 import type { ProgrammeCandidate, UnderstoodProfile, VerifiedField, VerifiedProgramme } from "./types";
 
@@ -23,6 +24,27 @@ export type AIProgramRecommendation = {
 };
 
 export type AIRecommendationProvider = { generate(profile: ApplicantProfile, relaxed?: boolean): Promise<AIProgramRecommendation[]> };
+export type SchoolRecommendationErrorCode = "OPENAI_API_KEY_MISSING" | "OPENAI_AUTHENTICATION_FAILED" | "OPENAI_INSUFFICIENT_QUOTA" | "OPENAI_RATE_LIMITED" | "OPENAI_PERMISSION_DENIED" | "OPENAI_INVALID_RESPONSE" | "OPENAI_REQUEST_FAILED";
+
+export class SchoolRecommendationError extends Error {
+  constructor(public readonly code: SchoolRecommendationErrorCode) { super(code); this.name = "SchoolRecommendationError"; }
+}
+
+function getOpenAIClient() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new SchoolRecommendationError("OPENAI_API_KEY_MISSING");
+  return new OpenAI({ apiKey });
+}
+
+export function normalizeOpenAIError(error: unknown): SchoolRecommendationError {
+  if (error instanceof SchoolRecommendationError) return error;
+  const value = error as { status?: number; code?: string };
+  if (value?.code === "insufficient_quota") return new SchoolRecommendationError("OPENAI_INSUFFICIENT_QUOTA");
+  if (value?.status === 401) return new SchoolRecommendationError("OPENAI_AUTHENTICATION_FAILED");
+  if (value?.status === 403) return new SchoolRecommendationError("OPENAI_PERMISSION_DENIED");
+  if (value?.status === 429) return new SchoolRecommendationError("OPENAI_RATE_LIMITED");
+  return new SchoolRecommendationError("OPENAI_REQUEST_FAILED");
+}
 
 export function buildApplicantProfile(raw: StudentProfile, profile: UnderstoodProfile): ApplicantProfile {
   const education = raw.educationHistory[0];
@@ -47,14 +69,19 @@ const schema = { type: "object", additionalProperties: false, required: ["recomm
 
 export class OpenAIRecommendationProvider implements AIRecommendationProvider {
   async generate(profile: ApplicantProfile, relaxed = false) {
-    const apiKey = process.env.OPENAI_API_KEY; if (!apiKey) throw new Error("OPENAI_API_KEY_NOT_CONFIGURED");
     const instructions = `You are Atlas's university programme planning engine. Return 10-20 real, specific university degree programmes suitable for the applicant. Only use countries in targetCountries. School and programme names must be separate. Never return books, articles, rankings, marketplaces, training courses, aggregators, or non-higher-education institutions. Do not require an Atlas database match. Uncertain but plausible programmes may be returned with low confidence and verification queries. Expand subject semantics where useful.${relaxed ? " Use broader related subject names while preserving countries and degree level." : ""}`;
-    const response = await fetch("https://api.openai.com/v1/responses", { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: RECOMMENDATION_MODEL, instructions, input: JSON.stringify(profile), text: { format: { type: "json_schema", name: "atlas_programme_recommendations", strict: true, schema } } }), signal: AbortSignal.timeout(55000) });
-    if (!response.ok) throw new Error(`OPENAI_RECOMMENDATION_FAILED_${response.status}`);
-    const payload = await response.json() as { output_text?: string; output?: { content?: { type?: string; text?: string }[] }[] };
-    const output = payload.output_text ?? payload.output?.flatMap(item => item.content ?? []).find(item => item.type === "output_text")?.text;
-    if (!output) throw new Error("OPENAI_RECOMMENDATION_EMPTY_OUTPUT");
-    return (JSON.parse(output) as { recommendations: AIProgramRecommendation[] }).recommendations;
+    try {
+      const response = await getOpenAIClient().responses.create({ model: RECOMMENDATION_MODEL, instructions, input: JSON.stringify(profile), text: { format: { type: "json_schema", name: "atlas_programme_recommendations", strict: true, schema } } });
+      if (!response.output_text) throw new SchoolRecommendationError("OPENAI_INVALID_RESPONSE");
+      try {
+        const recommendations = (JSON.parse(response.output_text) as { recommendations?: AIProgramRecommendation[] }).recommendations;
+        if (!Array.isArray(recommendations)) throw new SchoolRecommendationError("OPENAI_INVALID_RESPONSE");
+        return recommendations;
+      } catch (error) {
+        if (error instanceof SchoolRecommendationError) throw error;
+        throw new SchoolRecommendationError("OPENAI_INVALID_RESPONSE");
+      }
+    } catch (error) { throw normalizeOpenAIError(error); }
   }
 }
 
