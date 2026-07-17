@@ -22,6 +22,7 @@ export function assessEligibility(profile: UnderstoodProfile, programme: Verifie
 
 export function validateProgrammeForDisplay(candidate: ProgrammeCandidate, profile?: UnderstoodProfile): boolean {
   if (!candidate.institutionName.trim() || !candidate.programmeName.trim() || !candidate.country || !candidate.degreeLevel || !candidate.officialProgrammeUrl) return false;
+  if (candidate.generatedByAI) return !profile || (profile.targetCountries.includes(candidate.country) && (!profile.targetDegreeLevel || candidate.degreeLevel === profile.targetDegreeLevel));
   if (candidate.verifiedProgramme.sourceType !== "official" || candidate.verifiedProgramme.officialProgrammeUrl !== candidate.officialProgrammeUrl) return false;
   if (!candidate.sources.length || candidate.sources.some(source => source.sourceType !== "official")) return false;
   if (profile && (!profile.targetCountries.includes(candidate.country) || !profile.targetDegreeLevel || candidate.degreeLevel !== profile.targetDegreeLevel)) return false;
