@@ -124,7 +124,7 @@ export function getApplicationJourneyNodes(applicationRecords: ApplicationRecord
         missingInformation: record.missingMaterials,
         primaryCta: copy.action,
         completionRequirement: record.nextAction,
-        actionHref: `/applications/${record.id}/materials`,
+        actionHref: `/applications/${encodeURIComponent(record.id)}/materials`,
         applicationId: record.id,
         schoolName: record.universityName,
         programName: record.programName,
@@ -157,3 +157,4 @@ export function getAtlasPrimaryTask({ applicationRecords, selectedSchoolIds }: {
     userRequiredItems: node.missingInformation,
   };
 }
+
