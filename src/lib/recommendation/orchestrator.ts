@@ -10,6 +10,17 @@ import { retrieveCachedVerifiedProgrammes, searchCachedOfficialDiscoveries } fro
 import { aiRecommendationToCandidate, buildApplicantProfile, OpenAIRecommendationProvider, RECOMMENDATION_MODEL, RECOMMENDATION_PROMPT_VERSION, type AIRecommendationProvider } from "./ai-recommendation";
 
 const event = (stage: OrchestratorEvent["stage"], label: string, status: OrchestratorEvent["status"], detail?: string): OrchestratorEvent => ({ stage, label, status, detail });
+export function normalizeRecommendationCountry(country: string) {
+  const normalized = country.trim().toLowerCase().replaceAll(".", "");
+  const aliases: Record<string, string> = {
+    france: "法国", french: "法国", 法国: "法国",
+    "united kingdom": "英国", uk: "英国", england: "英国", scotland: "英国", wales: "英国", "great britain": "英国", 英国: "英国",
+    australia: "澳洲", australian: "澳洲", 澳洲: "澳洲", 澳大利亚: "澳洲",
+    spain: "西班牙", spanish: "西班牙", 西班牙: "西班牙",
+    "united states": "美国", usa: "美国", us: "美国", america: "美国", 美国: "美国",
+  };
+  return aliases[normalized] ?? country.trim();
+}
 const internalLead = (programme: SchoolRecommendation): ProgrammeLead | null => programme.officialProgramUrl ? { url: programme.officialProgramUrl, searchTitle: programme.programName, snippet: null, entityType: "official_programme", fieldRelation: "adjacent", discoveryQuery: "internal verified database", discoveredAt: new Date().toISOString() } : null;
 
 function deduplicate(leads: ProgrammeLead[], reviewQueue: RejectedProgrammeLead[]) {
@@ -29,6 +40,7 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
   const applicantProfile = buildApplicantProfile(input.profile, profile); const aiProvider = input.aiProvider ?? new OpenAIRecommendationProvider();
   events.push(event("programme_discovery", "Atlas 正在生成候选选校方案", "running"));
   let aiRecommendations = await aiProvider.generate(applicantProfile); if (!aiRecommendations.length) aiRecommendations = await aiProvider.generate(applicantProfile, true);
+  aiRecommendations = aiRecommendations.map((item) => ({ ...item, country: normalizeRecommendationCountry(item.country) }));
   const allowedAI = aiRecommendations.filter(item => profile.targetCountries.includes(item.country) && item.degreeLevel === profile.targetDegreeLevel && item.schoolName.trim() && item.programName.trim());
   const aiCandidates = allowedAI.map(aiRecommendationToCandidate);
   events.push(event("programme_discovery", "Atlas 候选方案已生成", "completed", `${aiCandidates.length} 个具体学校专业项目`));
