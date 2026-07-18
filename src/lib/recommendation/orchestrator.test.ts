@@ -7,6 +7,7 @@ import { retrieveCachedVerifiedProgrammes } from "./programme-repository";
 import { understandProfile } from "./profile-understanding";
 import { normalizeStudentProfile } from "../student-profile";
 import { aiRecommendationToCandidate, buildApplicantProfile, normalizeOpenAIError, SchoolRecommendationError, type AIProgramRecommendation } from "./ai-recommendation";
+import { normalizeRecommendationCountry } from "./orchestrator";
 import type { ProgrammeCandidate, UnderstoodProfile, VerifiedProgramme } from "./types";
 
 const verifiedProgramme: VerifiedProgramme = {
@@ -67,6 +68,12 @@ test("AI programmes missing from Atlas remain visible as pending verification", 
   assert.equal(result.generatedByAI, true);
   assert.equal(result.verificationStatus, "pending");
   assert.equal(validateProgrammeForDisplay(result, { targetCountries:["英国"], targetDegreeLevel:"master" } as UnderstoodProfile), true);
+});
+
+test("AI country aliases normalize before strict target-country filtering", () => {
+  assert.equal(normalizeRecommendationCountry("France"), "法国");
+  assert.equal(normalizeRecommendationCountry("United Kingdom"), "英国");
+  assert.equal(normalizeRecommendationCountry("UK"), "英国");
 });
 
 test("applicant profile sends facts Atlas already knows without inventing missing scores", () => {
