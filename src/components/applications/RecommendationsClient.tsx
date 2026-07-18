@@ -10,7 +10,7 @@ import { formatCNY, formatCNYFromFen } from "@/lib/format-currency";
 import { buildProgramPortfolio } from "@/lib/program-matching";
 import { getProgramContent, ProgramContentProfile, programKnowledgeFallback, programKnowledgeStatusCopy } from "@/lib/program-knowledge";
 import { emptyStudentProfile, writeStudentProfile, type StudentProfile } from "@/lib/student-profile";
-import { readActivePlanningRun, readPlanningRun, readRunComparisonSelection, updatePlanningRun, writeRunComparisonSelection } from "@/lib/planning-store";
+import { readActivePlanningRun, readPlanningRun, readRecommendationCandidates, readRunComparisonSelection, updatePlanningRun, writeRecommendationCandidates, writeRunComparisonSelection } from "@/lib/planning-store";
 import type { OrchestratorEvent, ProgrammeCandidate } from "@/lib/recommendation/types";
 
 const categoryCopy: Record<RecommendationCategory, { label: string; description: string }> = {
@@ -38,7 +38,8 @@ export function RecommendationsClient({ runId: requestedRunId }: { runId?: strin
   const [profile, setProfile] = useState(initialRun?.profile ?? emptyStudentProfile);
   const [runMissing, setRunMissing] = useState(false);
   const [orchestratorEvents, setOrchestratorEvents] = useState<OrchestratorEvent[]>([]);
-  const [programmeCandidates, setProgrammeCandidates] = useState<ProgrammeCandidate[]>([]);
+  const initialCandidates = initialRun ? readRecommendationCandidates(initialRun.id, initialRun.profile) ?? [] : [];
+  const [programmeCandidates, setProgrammeCandidates] = useState<ProgrammeCandidate[]>(initialCandidates);
   const [apiCandidateCount, setApiCandidateCount] = useState(0);
   const [emptyReason, setEmptyReason] = useState("");
   const [discoveryState, setDiscoveryState] = useState<"idle"|"searching"|"verifying"|"complete"|"error">("idle");
@@ -99,10 +100,17 @@ export function RecommendationsClient({ runId: requestedRunId }: { runId?: strin
 
   useEffect(() => {
     if (!runId || !profile.targetCountries.length || !profile.targetSubjects.length || !profile.targetDegreeLevel) return;
+    const cachedCandidates = readRecommendationCandidates(runId, profile);
+    if (cachedCandidates?.length) {
+      console.info("[school-recommendation-cache]", { cachedCandidateCount: cachedCandidates.length, renderedCardCount: cachedCandidates.length });
+      setCategory("all"); setApiCandidateCount(cachedCandidates.length); setProgrammeCandidates(cachedCandidates); setEmptyReason(""); setDiscoveryState("complete");
+      setOrchestratorEvents([{ stage: "complete", label: "已载入本次规划的推荐项目", status: "completed", detail: `${cachedCandidates.length} 个项目` }]);
+      return;
+    }
     let active=true; const controller=new AbortController(); const requestTimeout=window.setTimeout(()=>controller.abort(),125000); const timer=window.setTimeout(()=>{setDiscoveryState("searching"); setCategory("all"); setApiCandidateCount(0); setProgrammeCandidates([]); setOrchestratorEvents([{stage:"programme_discovery",label:"正在检索相关项目",status:"running"}]);
       fetch("/api/recommendations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({profile,plannedApplicationCount:6}),signal:controller.signal})
         .then(async response=>{setDiscoveryState("verifying");const data=await response.json() as {events?:OrchestratorEvent[];candidates?:ProgrammeCandidate[];emptyReason?:string;message?:string};if(!response.ok)throw new Error(data.message??"推荐服务暂时不可用");return data})
-        .then(result=>{if(!active)return;window.clearTimeout(requestTimeout);const candidates=result.candidates??[];console.info("[school-recommendation-fetch]",{apiCandidateCount:candidates.length});setApiCandidateCount(candidates.length);setOrchestratorEvents(result.events??[]);setProgrammeCandidates(candidates);setEmptyReason(result.emptyReason??"");setDiscoveryState("complete")})
+        .then(result=>{if(!active)return;window.clearTimeout(requestTimeout);const candidates=result.candidates??[];console.info("[school-recommendation-fetch]",{apiCandidateCount:candidates.length});writeRecommendationCandidates(runId,profile,candidates);setApiCandidateCount(candidates.length);setOrchestratorEvents(result.events??[]);setProgrammeCandidates(candidates);setEmptyReason(result.emptyReason??"");setDiscoveryState("complete")})
         .catch((requestError:unknown)=>{if(active){window.clearTimeout(requestTimeout);setError(requestError instanceof Error?requestError.message:"推荐服务暂时不可用");setDiscoveryState("error")}});},0);
     return()=>{active=false;controller.abort();window.clearTimeout(timer);window.clearTimeout(requestTimeout)};
   },[runId,profile]);
