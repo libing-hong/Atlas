@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "test:planning": "tsx --test src/lib/planning-report.test.ts",
-    "test:recommendation": "tsx --test src/lib/recommendation/orchestrator.test.ts"
+    "test:recommendation": "tsx --test src/lib/recommendation/orchestrator.test.ts",
+    "test:smoke": "node scripts/smoke-test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.1",
@@ -30,4 +31,3 @@
     "typescript": "^5.9.3"
   }
 }
-
