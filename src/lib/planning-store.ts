@@ -9,7 +9,7 @@ const runsKey = "atlas.planning-runs.v1";
 const activeRunKey = "atlas.active-planning-run-id.v1";
 const reportsKey = "atlas.planning-reports.v1";
 const planningEvent = "atlas-planning-state-change";
-const recommendationCandidatesKey = "atlas.recommendation-candidates.v1";
+const recommendationCandidatesKey = "atlas.recommendation-candidates.v2";
 
 type StoredRecommendationCandidates = { profile: StudentProfile; candidates: ProgrammeCandidate[] };
 
