@@ -27,11 +27,11 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
   events.push(event("profile_understanding", "已理解学生背景", "completed", profile.educationCountry === "英国" ? "英国本科按国际/英国学历规则评估，不使用中国院校规则。" : undefined));
   const expansions = expandField(profile.targetField); events.push(event("field_expansion", "已完成专业语义扩展", "completed", `${expansions.length} 个多语言检索词`));
   const applicantProfile = buildApplicantProfile(input.profile, profile); const aiProvider = input.aiProvider ?? new OpenAIRecommendationProvider();
-  events.push(event("programme_discovery", "正在由 OpenAI 生成候选选校方案", "running"));
+  events.push(event("programme_discovery", "Atlas 正在生成候选选校方案", "running"));
   let aiRecommendations = await aiProvider.generate(applicantProfile); if (!aiRecommendations.length) aiRecommendations = await aiProvider.generate(applicantProfile, true);
   const allowedAI = aiRecommendations.filter(item => profile.targetCountries.includes(item.country) && item.degreeLevel === profile.targetDegreeLevel && item.schoolName.trim() && item.programName.trim());
   const aiCandidates = allowedAI.map(aiRecommendationToCandidate);
-  events.push(event("programme_discovery", "OpenAI 候选方案已生成", "completed", `${aiCandidates.length} 个具体学校专业项目`));
+  events.push(event("programme_discovery", "Atlas 候选方案已生成", "completed", `${aiCandidates.length} 个具体学校专业项目`));
   const initialCandidates = (input.internalProgrammes ?? []).length + 5;
   const afterCountryFilter = (input.internalProgrammes ?? []).filter(programme => profile.targetCountries.includes(programme.country)).length + retrieveCachedVerifiedProgrammes(profile, expansions).length;
   const cachedVerified = retrieveCachedVerifiedProgrammes(profile, expansions);
