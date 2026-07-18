@@ -9,6 +9,7 @@ import { getAdmissionKnowledge } from "@/lib/admission-knowledge";
 import { readActivePlanningRun } from "@/lib/planning-store";
 import { readStudentProfile, StudentProfile, writeStudentProfile, profileDisplay } from "@/lib/student-profile";
 import { InstitutionEligibilityPanel, InstitutionVerification } from "./InstitutionEligibilityPanel";
+import { MotivationLetterVip } from "./MotivationLetterVip";
 
 const requirementLabels: Record<RequirementStatus, string> = { meets: "已达标", mostly_meets: "基本符合", needs_confirmation: "需要确认", gap_detected: "尚未达标", unknown: "信息不足" };
 const materialLabels: Record<string, string> = { not_detected: "未检测到", uploading: "上传中", processing: "Atlas 正在读取", needs_confirmation: "等待你确认", confirmed: "已确认", prepared: "已确认", review_required: "需要进一步检查", rejected: "文件无法使用" };
@@ -122,6 +123,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
 
   return <div className="space-y-6">
     <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" className="hidden" onChange={handleFile} />
+    <MotivationLetterVip school={school} applicationId={applicationId} />
 
     <ConfirmationActions pending={pending} onOpen={openRequirement} />
     {notice ? <div role="status" className="rounded-2xl border border-[#d8ccbe] bg-[#f7f0e8] p-4 text-sm text-[#5d5148]">{notice}</div> : null}
