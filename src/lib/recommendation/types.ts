@@ -39,6 +39,7 @@ export type ProgrammeCandidate = {
   academicStatus: AssessmentStatus; languageStatus: AssessmentStatus; budgetStatus: AssessmentStatus; timelineStatus: AssessmentStatus;
   verificationStatus: VerificationStatus; missingInformation: string[]; sources: SourceEvidence[]; matchExplanation: string;
   recommendationBand: RecommendationBand; score: number; verifiedProgramme: VerifiedProgramme;
+  admissionRequirements?: Array<{ category: "degree" | "grade" | "subject" | "language" | "experience" | "prerequisite" | "portfolio"; requirement: string | null; applicantAssessment: string; status: "meets" | "mostly_meets" | "needs_confirmation" | "gap_detected" | "unknown"; sourceUrl: string | null }>;
   generatedByAI?: boolean; aiRecommendation?: import("./ai-recommendation").AIProgramRecommendation;
 };
 export type OrchestratorStage = "profile_understanding" | "field_expansion" | "internal_search" | "programme_discovery" | "entity_verification" | "official_verification" | "eligibility_assessment" | "ranking" | "supervisor" | "complete";
