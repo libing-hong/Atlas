@@ -133,12 +133,20 @@ export function readApplicationRecords(planningRunId?: string): ApplicationRecor
   if (typeof window === "undefined") return [];
   try {
     const records = JSON.parse(window.localStorage.getItem(recordsKey) ?? "[]") as ApplicationRecord[];
-    const normalized = records.map((record) => ({
-      ...record,
-      planningRunId: record.planningRunId ?? "legacy",
-      detectedMaterialCount: record.detectedMaterialCount ?? record.preparedMaterials,
-      applicationProgress: record.applicationProgress ?? Math.round((record.preparedMaterials / Math.max(record.totalMaterials, 1)) * 45),
-    }));
+    const normalized = records.map((record) => {
+      const legacyEmpty = !record.totalMaterials;
+      const totalMaterials = legacyEmpty ? commonMaterials.length : record.totalMaterials;
+      const preparedMaterials = legacyEmpty ? 0 : record.preparedMaterials;
+      return {
+        ...record,
+        planningRunId: record.planningRunId ?? "legacy",
+        totalMaterials,
+        preparedMaterials,
+        detectedMaterialCount: legacyEmpty ? 0 : record.detectedMaterialCount ?? preparedMaterials,
+        missingMaterials: legacyEmpty ? commonMaterials.map((item) => item.name) : record.missingMaterials,
+        applicationProgress: legacyEmpty ? 0 : record.applicationProgress ?? Math.round((preparedMaterials / Math.max(totalMaterials, 1)) * 45),
+      };
+    });
     return planningRunId ? normalized.filter((record) => record.planningRunId === planningRunId) : normalized;
   } catch { return []; }
 }
@@ -340,7 +348,7 @@ export function completeServiceOrder(orderId: string) {
 
 export function getMaterialsForApplication(record: ApplicationRecord, school: SchoolRecommendation): ApplicationMaterial[] {
   return [
-    ...commonMaterials.map((material, index) => ({ ...material, status: index < Math.max(2, Math.min(record.preparedMaterials, commonMaterials.length)) ? "prepared" as const : "review_required" as const })),
+    ...commonMaterials.map((material, index) => ({ ...material, status: index < Math.min(record.preparedMaterials, commonMaterials.length) ? "prepared" as const : "not_detected" as const })),
     ...school.requirements.filter((name) => !commonMaterials.some((material) => material.name === name)).map((name, index) => ({
       id: `${record.id}-${index}`,
       name,
@@ -350,3 +358,4 @@ export function getMaterialsForApplication(record: ApplicationRecord, school: Sc
     })),
   ];
 }
+
