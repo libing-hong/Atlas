@@ -40,6 +40,7 @@ export function ApplicationMaterialsPageClient({ applicationId }: { applicationI
     officialProgramUrl: candidate?.officialProgrammeUrl,
     applicationUrl: candidate?.verifiedProgramme.applicationUrl.value ?? undefined,
     applicationLinkStatus: candidate?.verifiedProgramme.applicationUrl.value ? "verified" : "needs_review",
+    admissionRequirements: candidate?.admissionRequirements?.map((item) => ({ id: item.category, label: { degree: "学位要求", grade: "成绩或 GPA 要求", subject: "本科专业背景", language: "语言成绩", experience: "工作或实习经历", prerequisite: "先修课程", portfolio: "作品集或其他特殊要求" }[item.category], schoolRequirement: item.requirement ?? "该项要求仍待官方核验", userSituation: item.applicantAssessment, status: item.status, officialProgramUrl: item.sourceUrl ?? candidate.officialProgrammeUrl })),
     recommendationContent: { summary: candidate?.matchExplanation ?? "Atlas 已根据本次规划创建材料工作区。", personalFit: candidate?.matchExplanation ?? "", schoolHighlights: "", programHighlights: "", cautions: candidate?.missingInformation ?? [], sources: [] },
   };
 
