@@ -9,7 +9,7 @@ import { BackHome } from "@/components/PageShell";
 import { recommendations } from "@/lib/application-prototype-data";
 import { buildProgramPortfolio } from "@/lib/program-matching";
 import { buildPlanningReport, PlanningReport } from "@/lib/planning-report";
-import { readActivePlanningRun, readPlanningRun, writePlanningReport } from "@/lib/planning-store";
+import { readActivePlanningRun, readPlanningRun, writePlanningReport, writeRecommendationCandidates } from "@/lib/planning-store";
 import type { ProgrammeCandidate } from "@/lib/recommendation/types";
 
 export default function ResultPage() {
@@ -48,6 +48,7 @@ export default function ResultPage() {
           renderedCardCount: Math.min(candidates.length, 6),
         });
         setProgrammeCandidates(candidates);
+        writeRecommendationCandidates(run.id, run.profile, candidates);
         setRecommendationStatus("ready");
       } catch {
         if (!controller.signal.aborted) {
