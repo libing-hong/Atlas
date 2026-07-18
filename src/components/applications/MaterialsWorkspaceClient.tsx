@@ -123,7 +123,6 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
 
   return <div className="space-y-6">
     <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" className="hidden" onChange={handleFile} />
-    <MotivationLetterVip school={school} applicationId={applicationId} />
 
     <ConfirmationActions pending={pending} onOpen={openRequirement} />
     {notice ? <div role="status" className="rounded-2xl border border-[#d8ccbe] bg-[#f7f0e8] p-4 text-sm text-[#5d5148]">{notice}</div> : null}
@@ -145,6 +144,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
         })}
       </div>
     </Card>
+    <MotivationLetterVip school={school} applicationId={applicationId} />
 
     <div ref={institutionRef} className="scroll-mt-6"><InstitutionEligibilityPanel targetUniversityId={school.id} targetUniversityName={school.universityName} institutionName={primaryEducation?.institutionNameEn ?? primaryEducation?.institutionNameZh ?? ""} programName={school.programName} intake={school.intake} onStatusChange={(value) => { setInstitution(value); if (value.complete && gradeRequirement) { persistConfirmations([...new Set([...confirmedIds, gradeRequirement.id])]); setNotice("院校核验已更新，录取要求状态和待确认事项已自动重新计算。"); } }} /></div>
 
