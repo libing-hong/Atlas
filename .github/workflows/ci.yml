@@ -45,6 +45,9 @@ jobs:
       - name: Test recommendations
         run: npm run test:recommendation
 
+      - name: Test API security
+        run: npm run test:security
+
       - name: Production build
         run: npm run build
 

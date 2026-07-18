@@ -1,4 +1,5 @@
 import type { DegreeLevel, InstitutionVerification, ProgrammeLead, ProgrammeVerification, RejectedProgrammeLead, RejectionReason, SourceEvidence, UnderstoodProfile, VerifiedField, VerifiedProgramme, VerificationStatus } from "./types";
+import { safeFetchText } from "@/lib/server/safe-fetch";
 
 const blockedDomain = /(amazon\.|goodreads\.|facebook\.|linkedin\.|instagram\.|youtube\.|wikipedia\.|mastersportal\.|findamasters\.|studyportals\.|educations\.com|gostudyin\.|reddit\.|medium\.|blogspot\.|wordpress\.)/i;
 const decode = (value: string) => value.replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;/gi, "'").replace(/&eacute;/gi, "é").replace(/\s+/g, " ").trim();
@@ -66,9 +67,9 @@ export async function verifyProgrammeLead(lead: ProgrammeLead, profile: Understo
   if (reasons.length) return { rejection: { lead, reasons: [...new Set(reasons)] } };
 
   const retrievedAt = new Date().toISOString();
-  const response = await fetch(lead.url, { headers: { "User-Agent": "AtlasOfficialVerifier/2.0" }, cache: "no-store", signal: AbortSignal.timeout(12000) }).catch(() => null);
+  const response = await safeFetchText(lead.url, { timeoutMs: 8_000, maxBytes: 1_500_000, allowedContentTypes: ["text/html", "application/xhtml+xml"], init: { headers: { "User-Agent": "AtlasOfficialVerifier/2.0" } } }).catch(() => null);
   if (!response?.ok) return { rejection: { lead, reasons: ["PROGRAMME_NOT_VERIFIED"] } };
-  const finalUrl = response.url || lead.url; const finalParsed = new URL(finalUrl); const html = await response.text(); const body = plainText(html); const records = structuredData(html);
+  const finalUrl = response.url || lead.url; const finalParsed = new URL(finalUrl); const html = response.text; const body = plainText(html); const records = structuredData(html);
   const institutionName = extractInstitution(records, body); const programmeName = extractProgramme(records, html, body); const officialRootDomain = rootDomain(finalParsed.hostname);
   const country = finalParsed.hostname.endsWith(".ac.uk") ? "英国" : finalParsed.hostname.endsWith(".edu.au") ? "澳洲" : finalParsed.hostname.endsWith(".fr") ? "法国" : extractStructuredCountry(records) ?? canonicalCountry(`${finalParsed.hostname} ${body.slice(0, 12000)}`);
   const institutionVerified = Boolean(institutionName && officialRootDomain && !blockedDomain.test(finalParsed.hostname));

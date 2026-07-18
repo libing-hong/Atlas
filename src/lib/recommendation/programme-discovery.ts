@@ -1,4 +1,5 @@
 import type { EntityType, FieldExpansion, FieldRelation, ProgrammeLead, UnderstoodProfile } from "./types";
+import { safeFetchText } from "@/lib/server/safe-fetch";
 
 export interface ProgrammeDiscoveryProvider { discover(profile: UnderstoodProfile, terms: FieldExpansion[], limit: number): Promise<ProgrammeLead[]> }
 type SearchResult = { title: string; url: string; snippet?: string };
@@ -32,15 +33,15 @@ export class OfficialWebDiscoveryProvider implements ProgrammeDiscoveryProvider 
     const queries = terms.slice(0, 6).map(term => `site:.edu OR site:.ac.uk OR site:.fr OR site:.edu.au "${term.term}" (${countries}) ${level} admissions`);
     const batches = await Promise.all(queries.map(async (query): Promise<ProgrammeLead[]> => {
       if (process.env.PROGRAMME_SEARCH_API_URL) {
-        const response = await fetch(process.env.PROGRAMME_SEARCH_API_URL, { method: "POST", headers: { "Content-Type": "application/json", ...(process.env.PROGRAMME_SEARCH_API_KEY ? { Authorization: `Bearer ${process.env.PROGRAMME_SEARCH_API_KEY}` } : {}) }, body: JSON.stringify({ query, limit }), cache: "no-store", signal: AbortSignal.timeout(6000) }).catch(() => null);
+        const response = await safeFetchText(process.env.PROGRAMME_SEARCH_API_URL, { timeoutMs: 6_000, maxBytes: 500_000, allowedContentTypes: ["application/json"], init: { method: "POST", headers: { "Content-Type": "application/json", ...(process.env.PROGRAMME_SEARCH_API_KEY ? { Authorization: `Bearer ${process.env.PROGRAMME_SEARCH_API_KEY}` } : {}) }, body: JSON.stringify({ query, limit }) } }).catch(() => null);
         if (response?.ok) {
-          const payload = await response.json() as { results?: SearchResult[] };
+          const payload = JSON.parse(response.text) as { results?: SearchResult[] };
           return (payload.results ?? []).slice(0, limit).map(result => toLead(result, query, terms));
         }
       }
-      const response = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, { headers: { "User-Agent": "AtlasProgrammeDiscovery/2.0" }, cache: "no-store", signal: AbortSignal.timeout(6000) }).catch(() => null);
+      const response = await safeFetchText(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, { timeoutMs: 6_000, maxBytes: 750_000, allowedContentTypes: ["text/html"], allowedDomains: ["duckduckgo.com"], init: { headers: { "User-Agent": "AtlasProgrammeDiscovery/2.0" } } }).catch(() => null);
       if (!response?.ok) return [];
-      const leads: ProgrammeLead[] = []; const html = await response.text(); const pattern = /<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi; let match: RegExpExecArray | null;
+      const leads: ProgrammeLead[] = []; const html = response.text; const pattern = /<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi; let match: RegExpExecArray | null;
       while ((match = pattern.exec(html)) && leads.length < limit) { let url = decode(match[1]); try { const redirect = new URL(url, "https://duckduckgo.com"); url = redirect.searchParams.get("uddg") ?? url; } catch {} leads.push(toLead({ url, title: decode(match[2]) }, query, terms)); }
       return leads;
     }));

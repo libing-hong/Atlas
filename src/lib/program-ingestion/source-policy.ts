@@ -1,4 +1,5 @@
 import "server-only";
+import { safeFetchText } from "@/lib/server/safe-fetch";
 
 const crawlerUserAgent = "AtlasKnowledgeBot/1.0 (+https://atlas.example/knowledge-ops)";
 const minimumIntervalMs = 2500;
@@ -46,13 +47,10 @@ export async function robotsAllows(url: string, fetcher: typeof fetch = fetch) {
   const target = new URL(url);
   const robotsUrl = `${target.protocol}//${target.host}/robots.txt`;
   try {
-    const response = await fetcher(robotsUrl, {
-      headers: { "user-agent": crawlerUserAgent, accept: "text/plain" },
-      signal: AbortSignal.timeout(atlasCrawlerPolicy.requestTimeoutMs),
-      cache: "force-cache",
-    });
+    void fetcher;
+    const response = await safeFetchText(robotsUrl, { allowedDomains: [target.hostname], timeoutMs: atlasCrawlerPolicy.requestTimeoutMs, maxBytes: 256_000, allowedContentTypes: ["text/plain"], init: { headers: { "user-agent": crawlerUserAgent, accept: "text/plain" } } });
     if (!response.ok) return { allowed: true, robotsUrl, reason: "robots.txt unavailable; use conservative rate limit" };
-    const groups = parseRobots(await response.text());
+    const groups = parseRobots(response.text);
     const agent = crawlerUserAgent.split("/")[0].toLowerCase();
     const matching = groups.filter((group) => group.agents.includes(agent) || group.agents.includes("*"));
     const blocked = matching.flatMap((group) => group.disallow).filter(Boolean).some((path) => target.pathname.startsWith(path));
@@ -75,14 +73,12 @@ export async function fetchOfficialPage(url: string, officialDomains: string[], 
   const robots = await robotsAllows(url, fetcher);
   if (!robots.allowed) throw new Error("Official source blocks automated access");
   await waitForDomainRateLimit(url);
-  return fetcher(url, {
-    headers: {
+  void fetcher;
+  const response = await safeFetchText(url, { allowedDomains: officialDomains, timeoutMs: atlasCrawlerPolicy.requestTimeoutMs, maxRedirects: atlasCrawlerPolicy.maxRedirects, maxBytes: 2_000_000, allowedContentTypes: ["text/html", "application/xhtml+xml", "application/pdf", "application/xml", "text/xml"], init: { headers: {
       "user-agent": crawlerUserAgent,
       accept: "text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.1",
       "accept-language": "en,fr;q=0.8",
-    },
-    redirect: "follow",
-    signal: AbortSignal.timeout(atlasCrawlerPolicy.requestTimeoutMs),
-    cache: "no-store",
-  });
+    } } });
+  return { ...response, text: async () => response.text };
 }
+
