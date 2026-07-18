@@ -75,3 +75,7 @@ textarea {
 .editorial-rule {
   border-top: 1px solid var(--line);
 }
+span.rounded-full {
+  white-space: nowrap;
+}
+
