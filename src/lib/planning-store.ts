@@ -1,5 +1,6 @@
 import type { StudentProfile } from "./student-profile";
 import type { PlanningReport } from "./planning-report";
+import type { ProgrammeCandidate } from "./recommendation/types";
 
 export type PlanningRunStatus = "created" | "report_ready" | "schools_selected" | "schools_confirmed";
 export type PlanningRun = { id: string; profile: StudentProfile; status: PlanningRunStatus; createdAt: string; updatedAt: string };
@@ -8,6 +9,9 @@ const runsKey = "atlas.planning-runs.v1";
 const activeRunKey = "atlas.active-planning-run-id.v1";
 const reportsKey = "atlas.planning-reports.v1";
 const planningEvent = "atlas-planning-state-change";
+const recommendationCandidatesKey = "atlas.recommendation-candidates.v1";
+
+type StoredRecommendationCandidates = { profile: StudentProfile; candidates: ProgrammeCandidate[] };
 
 function readMap<T>(key: string): Record<string, T> {
   if (typeof window === "undefined") return {};
@@ -82,6 +86,17 @@ export function writePlanningReport(report: PlanningReport) {
   updatePlanningRun(report.planningRunId, { status: "report_ready" });
 }
 export function readPlanningReport(runId?: string | null) { return runId ? readMap<PlanningReport>(reportsKey)[runId] : undefined; }
+export function writeRecommendationCandidates(runId: string, profile: StudentProfile, candidates: ProgrammeCandidate[]) {
+  const stored = readMap<StoredRecommendationCandidates>(recommendationCandidatesKey);
+  stored[runId] = { profile, candidates };
+  writeMap(recommendationCandidatesKey, stored);
+}
+export function readRecommendationCandidates(runId?: string | null, profile?: StudentProfile) {
+  if (!runId) return undefined;
+  const stored = readMap<StoredRecommendationCandidates>(recommendationCandidatesKey)[runId];
+  if (!stored || (profile && JSON.stringify(stored.profile) !== JSON.stringify(profile))) return undefined;
+  return stored.candidates;
+}
 export function readRunSelection(runId?: string | null) { return runId ? readMap<string[]>("atlas.application.selection.v2")[runId] ?? [] : []; }
 export function writeRunSelection(runId: string, ids: string[]) {
   const selections = readMap<string[]>("atlas.application.selection.v2");
@@ -100,6 +115,7 @@ export function writeRunComparisonSelection(runId: string, ids: string[]) {
 export function resetDerivedPlanningState(runId: string) {
   if (typeof window === "undefined") return;
   const reports = readMap<PlanningReport>(reportsKey); delete reports[runId]; writeMap(reportsKey, reports);
+  const candidates = readMap<StoredRecommendationCandidates>(recommendationCandidatesKey); delete candidates[runId]; writeMap(recommendationCandidatesKey, candidates);
   const selections = readMap<string[]>("atlas.application.selection.v2"); selections[runId] = []; writeMap("atlas.application.selection.v2", selections);
   const comparisons = readMap<string[]>("atlas.school-comparison.selection.v2"); comparisons[runId] = []; writeMap("atlas.school-comparison.selection.v2", comparisons);
   ["atlas.application.selection.v1", "atlas.school-comparison.selection.v1", "atlas.school-comparison.result.v1", "atlas.application.workspace.v1", "atlas.application.mode.v1"].forEach((key) => window.localStorage.removeItem(key));
@@ -116,6 +132,7 @@ export function clearPrototypePlanningData() {
   window.localStorage.setItem("atlas.application.records.v1", JSON.stringify(records.filter((record) => protectedStatuses.has(record.status ?? ""))));
   const orders = safeJson<Array<{ status?: string }>>("atlas.service-orders.v1", []);
   window.localStorage.setItem("atlas.service-orders.v1", JSON.stringify(orders.filter((order) => ["paid", "processing", "refunded"].includes(order.status ?? ""))));
-  [runsKey, activeRunKey, reportsKey, "atlas.student-profile.v2", "atlas.application.selection.v1", "atlas.application.selection.v2", "atlas.application.workspace.v1", "atlas.application.mode.v1", "atlas.active-service-order.v1", "atlas.school-comparison.selection.v1", "atlas.school-comparison.selection.v2", "atlas.school-comparison.result.v1"].forEach((key) => window.localStorage.removeItem(key));
+  [runsKey, activeRunKey, reportsKey, recommendationCandidatesKey, "atlas.student-profile.v2", "atlas.application.selection.v1", "atlas.application.selection.v2", "atlas.application.workspace.v1", "atlas.application.mode.v1", "atlas.active-service-order.v1", "atlas.school-comparison.selection.v1", "atlas.school-comparison.selection.v2", "atlas.school-comparison.result.v1"].forEach((key) => window.localStorage.removeItem(key));
   emitPlanningStateChange();
 }
+
