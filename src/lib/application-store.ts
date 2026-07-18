@@ -349,6 +349,7 @@ export function completeServiceOrder(orderId: string) {
 export function getMaterialsForApplication(record: ApplicationRecord, school: SchoolRecommendation): ApplicationMaterial[] {
   return [
     ...commonMaterials.map((material, index) => ({ ...material, status: index < Math.min(record.preparedMaterials, commonMaterials.length) ? "prepared" as const : "not_detected" as const })),
+    { id: "motivation-letter", name: "动机信 / 个人陈述", status: "not_detected" as const, reusableFor: [school.id], note: "已有文书可直接上传，无需购买；尚未准备时可选择上方的学校定制文书" },
     ...school.requirements.filter((name) => !commonMaterials.some((material) => material.name === name)).map((name, index) => ({
       id: `${record.id}-${index}`,
       name,
