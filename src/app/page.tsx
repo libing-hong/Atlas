@@ -27,7 +27,7 @@ export default function Home() {
             </h1>
             <p className="mt-7 max-w-2xl text-lg leading-8 text-[#6f6256]">
               Project Atlas 把选校判断、申请节奏、材料清单与服务订单放进一个优雅的留学旅程空间。
-              第一版先用 AI mock 报告跑通商业流程，后续可接 OpenAI、Supabase 与真实支付。
+              Atlas 将逐步完善规划、数据服务与申请支持流程。
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <Link
@@ -114,3 +114,4 @@ export default function Home() {
     </>
   );
 }
+
