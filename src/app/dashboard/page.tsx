@@ -71,7 +71,7 @@ export default function DashboardPage() {
               <p className="text-xs uppercase tracking-[0.28em] text-[#9a8b7c]">
                 <T en="The one thing to do next" zh="现在只需要先做这一件事" />
               </p>
-              <h2 className="mt-3 max-w-3xl font-editorial text-4xl font-semibold leading-tight text-[#2f2924] md:text-5xl">
+              <h2 className="mt-3 max-w-3xl font-editorial text-3xl font-semibold leading-tight text-[#2f2924]">
                 {primaryTask.title}
               </h2>
               <p className="mt-4 max-w-2xl text-base leading-7 text-[#5d5148]">{primaryTask.description}</p>
