@@ -27,7 +27,11 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
   const requirements = useMemo(() => getAdmissionRequirements(school), [school]);
   const knowledge = getAdmissionKnowledge(school.id);
   const baseMaterials = useMemo(() => getMaterialsForApplication(record, school), [record, school]);
-  const [statuses, setStatuses] = useState<Record<string, string>>(() => Object.fromEntries(baseMaterials.map((item) => [item.id, item.status])));
+  const [statuses, setStatuses] = useState<Record<string, string>>(() => {
+    const defaults = Object.fromEntries(baseMaterials.map((item) => [item.id, item.status]));
+    if (typeof window === "undefined") return defaults;
+    try { return { ...defaults, ...JSON.parse(window.localStorage.getItem(`atlas.material-statuses.${applicationId}`) ?? "{}") as Record<string, string> }; } catch { return defaults; }
+  });
   const [files, setFiles] = useState<Record<string, string>>({});
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -62,8 +66,9 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
   }
 
   function syncMaterialStatus(nextStatuses: Record<string, string>) {
-    const detectedMaterialCount = Object.values(nextStatuses).filter((status) => status === "prepared" || status === "confirmed").length;
-    const missingMaterials = baseMaterials.filter((material) => !["prepared", "confirmed"].includes(nextStatuses[material.id] ?? material.status)).map((material) => material.name);
+    window.localStorage.setItem(`atlas.material-statuses.${applicationId}`, JSON.stringify(nextStatuses));
+    const detectedMaterialCount = Object.values(nextStatuses).filter((status) => !["not_detected", "rejected"].includes(status)).length;
+    const missingMaterials = baseMaterials.filter((material) => ["not_detected", "rejected"].includes(nextStatuses[material.id] ?? material.status)).map((material) => material.name);
     const readyToApply = missingMaterials.length === 0;
     updateApplicationRecord(applicationId, {
       detectedMaterialCount,
