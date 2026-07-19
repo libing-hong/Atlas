@@ -7,7 +7,7 @@ import { understandProfile } from "./profile-understanding";
 import { verifyProgrammeLead } from "./official-verification";
 import type { OrchestratorEvent, OrchestratorResult, ProgrammeLead, RejectedProgrammeLead } from "./types";
 import { retrieveCachedVerifiedProgrammes, searchCachedOfficialDiscoveries } from "./programme-repository";
-import { aiRecommendationToCandidate, buildApplicantProfile, OpenAIRecommendationProvider, RECOMMENDATION_MODEL, RECOMMENDATION_PROMPT_VERSION, type AIProgramRecommendation, type AIRecommendationProvider } from "./ai-recommendation";
+import { aiRecommendationToCandidate, buildApplicantProfile, normalizeOpenAIError, OpenAIRecommendationProvider, RECOMMENDATION_MODEL, RECOMMENDATION_PROMPT_VERSION, type AIProgramRecommendation, type AIRecommendationProvider } from "./ai-recommendation";
 
 const event = (stage: OrchestratorEvent["stage"], label: string, status: OrchestratorEvent["status"], detail?: string): OrchestratorEvent => ({ stage, label, status, detail });
 export function normalizeRecommendationCountry(country: string) {
@@ -49,9 +49,9 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
   const cachedVerified = retrieveCachedVerifiedProgrammes(profile, expansions);
   const applicantProfile = buildApplicantProfile(input.profile, profile); const aiProvider = input.aiProvider ?? new OpenAIRecommendationProvider();
   events.push(event("programme_discovery", "Atlas 正在生成候选选校方案", "running"));
-  let aiRecommendations: AIProgramRecommendation[] = [];
+  let aiRecommendations: AIProgramRecommendation[] = []; let aiErrorCode: string | undefined;
   try { aiRecommendations = await aiProvider.generate(applicantProfile); }
-  catch { events.push(event("programme_discovery", "AI 探索候选暂不可用", "completed", "已核验结果仍会正常返回")); }
+  catch (error) { aiErrorCode = normalizeOpenAIError(error).code; events.push(event("programme_discovery", "AI 探索候选暂不可用", "completed", "已核验结果仍会正常返回")); }
   aiRecommendations = aiRecommendations.map((item) => ({ ...item, country: normalizeRecommendationCountry(item.country) }));
   const allowedAI = aiRecommendations.filter(item => profile.targetCountries.includes(item.country) && item.degreeLevel === profile.targetDegreeLevel && item.schoolName.trim() && item.programName.trim());
   const aiCandidates = allowedAI.map(aiRecommendationToCandidate);
@@ -78,6 +78,7 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
   events.push(event("ranking", "推荐排序已完成", "completed", `${verifiedCount} 个已核验项目，${pendingCount} 个探索性候选`)); events.push(event("supervisor", "Supervisor 已完成结果检查", "completed", issues[0])); events.push(event("complete", pendingCount ? "部分结果仍在核验" : "推荐流程完成", "completed"));
   const atlasNames = new Set(cachedVerified.map(item => `${item.institutionName}|${item.programmeName}`.toLowerCase())); const atlasSchools = new Set(cachedVerified.map(item => item.institutionName.toLowerCase()));
   const debug = { initialCandidates, afterCountryFilter, afterDegreeFilter: cachedVerified.length, afterSubjectMatch: verified.length, afterEligibilityCheck: candidates.length, afterValidation: candidates.length, openAIRequestStarted:true, model:RECOMMENDATION_MODEL,promptVersion:RECOMMENDATION_PROMPT_VERSION,aiCandidatesReturned:aiRecommendations.length,atlasSchoolMatches:aiRecommendations.filter(item=>atlasSchools.has(item.schoolName.toLowerCase())).length,atlasProgramMatches:aiRecommendations.filter(item=>atlasNames.has(`${item.schoolName}|${item.programName}`.toLowerCase())).length,pendingVerification:candidates.filter(item=>item.generatedByAI).length,verifiedRecommendations:candidates.filter(item=>!item.generatedByAI).length,excluded:aiRecommendations.length-allowedAI.length };
-  const emptyReason = candidates.length ? undefined : cachedVerified.length === 0 ? "当前数据库中没有覆盖该国家、学位层级和专业方向组合的已核验项目。" : "候选项目未通过官方来源与展示校验。";
-  return { profile, expansions, candidates, reviewQueue, fallbackLevel: candidates.length >= profile.plannedApplicationCount ? 1 : candidates.length ? 4 : 5, emptyReason, debug, events, supervisor: { sufficient: candidates.length >= profile.plannedApplicationCount, issues, discoveryPasses: passes } };
+  const generationStatus = candidates.length === 0 ? "empty" : aiErrorCode || candidates.length < profile.plannedApplicationCount ? "partial" : "complete";
+  const emptyReason = candidates.length ? undefined : aiErrorCode && cachedVerified.length === 0 ? "AI 推荐暂时不可用，且当前已核验数据库尚未覆盖这一国家、学历层级与专业组合。请稍后重试。" : cachedVerified.length === 0 ? "当前数据库中没有覆盖该国家、学位层级和专业方向组合的已核验项目。" : "候选项目未通过官方来源与展示校验。";
+  return { profile, expansions, candidates, reviewQueue, fallbackLevel: candidates.length >= profile.plannedApplicationCount ? 1 : candidates.length ? 4 : 5, generationStatus, aiStatus: aiErrorCode ? "unavailable" : "completed", aiErrorCode, emptyReason, debug, events, supervisor: { sufficient: candidates.length >= profile.plannedApplicationCount, issues, discoveryPasses: passes } };
 }

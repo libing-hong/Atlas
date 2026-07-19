@@ -25,12 +25,12 @@ export async function POST(request: Request) {
       }); inflight.set(key, pending);
     }
     const value = await pending; cache.set(key, { expiresAt: Date.now() + 10 * 60_000, value }); inflight.delete(key);
-    secureLog("info", "recommendation_complete", ctx, { durationMs: Date.now() - startedAt, model: RECOMMENDATION_MODEL, promptVersion: RECOMMENDATION_PROMPT_VERSION });
+    const result = value as { candidates?: Array<{ verificationStatus?: string }>; generationStatus?: string; aiStatus?: string; aiErrorCode?: string };
+    const candidates = result.candidates ?? []; const verifiedCount = candidates.filter(item => item.verificationStatus === "verified").length;
+    secureLog(result.generationStatus === "complete" ? "info" : "warn", result.generationStatus === "empty" ? "recommendation_empty" : result.generationStatus === "partial" ? "recommendation_partial" : "recommendation_complete", ctx, { durationMs: Date.now() - startedAt, model: RECOMMENDATION_MODEL, promptVersion: RECOMMENDATION_PROMPT_VERSION, candidateCount: candidates.length, verifiedCount, pendingCount: candidates.length - verifiedCount, aiStatus: result.aiStatus, errorCode: result.aiErrorCode });
     return apiResponse(ctx, value);
   } catch (error) {
     const code = error instanceof SchoolRecommendationError ? error.code : undefined; secureLog("warn", "recommendation_failed", ctx, { durationMs: Date.now() - startedAt, model: RECOMMENDATION_MODEL, promptVersion: RECOMMENDATION_PROMPT_VERSION, errorCode: code });
     return apiError(ctx, error, code ? "SERVICE_UNAVAILABLE" : "INTERNAL_ERROR");
   }
 }
-
-
