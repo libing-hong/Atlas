@@ -10,6 +10,7 @@
     "test:planning": "tsx --test src/lib/planning-report.test.ts",
     "test:recommendation": "tsx --test src/lib/recommendation/orchestrator.test.ts",
     "test:security": "tsx --test src/lib/server/api-security.test.ts",
+    "test:rls": "tsx --test src/lib/data/rls.test.ts",
     "test:smoke": "node scripts/smoke-test.mjs"
   },
   "dependencies": {
@@ -32,4 +33,3 @@
     "typescript": "^5.9.3"
   }
 }
-
