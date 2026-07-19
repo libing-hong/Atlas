@@ -59,9 +59,16 @@ export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
         <nav className="mt-6 space-y-1.5">
           {links.map((item) => {
             const Icon = item.icon;
+            const unavailable = "active" in item && !item.active;
             const isActive = item.href === "/dashboard/applications"
               ? pathname.startsWith("/dashboard/applications") || pathname.startsWith("/applications")
               : pathname === item.href;
+            if (unavailable) return (
+              <div key={item.href} aria-disabled="true" className="flex cursor-not-allowed items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm text-[#8f847a]">
+                <span className="flex min-w-0 items-center gap-3"><Icon size={18} className="shrink-0" /><span className="truncate">{t(item.label)}</span></span>
+                <span className="inline-flex items-center gap-1 text-[10px]"><Lock size={12} />即将开放</span>
+              </div>
+            );
             return (
               <Link
                 key={item.href}
@@ -75,7 +82,6 @@ export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
                   <Icon size={18} className="shrink-0" />
                   <span className="truncate">{t(item.label)}</span>
                 </span>
-                {"active" in item && !item.active ? <Lock size={13} className="shrink-0 opacity-55" /> : null}
               </Link>
             );
           })}
@@ -124,13 +130,9 @@ export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
 
       {mode === "student" ? (
         <div className="fixed bottom-[74px] right-4 z-40 lg:hidden">
-          <Link
-            href="/dashboard/assistant"
-            className="grid h-12 w-12 place-items-center rounded-full bg-[#2f2924] text-[#fffaf3] shadow-lg"
-            aria-label="Open Atlas Assistant"
-          >
+          <button type="button" disabled className="grid h-12 w-12 cursor-not-allowed place-items-center rounded-full bg-[#8f847a] text-[#fffaf3] shadow-lg" aria-label="Atlas 助手即将开放" title="即将开放">
             <MessageSquare size={20} />
-          </Link>
+          </button>
         </div>
       ) : null}
     </>

@@ -29,7 +29,7 @@ export function LegalLayout({ document, children }: { document: LegalDocument; c
               <div className="mt-5 flex flex-wrap gap-2 text-xs text-[#6f6256]">
                 <span className="rounded-full border border-[#d8ccbe] px-3 py-1.5">版本：{document.version}</span>
                 <span className="rounded-full border border-[#d8ccbe] px-3 py-1.5">生效日期：{document.effectiveAt}</span>
-                <span className="rounded-full border border-[#d8ccbe] bg-[#f7f0e8] px-3 py-1.5">占位内容待确认</span>
+                <span className="rounded-full border border-[#d8ccbe] bg-[#f7f0e8] px-3 py-1.5">测试草案 · 尚未正式生效</span>
               </div>
             </div>
           </div>

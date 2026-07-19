@@ -1,3 +1,5 @@
+import { countryLabel, normalizeCountryCodes, type TargetCountryCode } from "./country-data";
+
 export const ENGLISH_TESTS = ["IELTS Academic", "TOEFL iBT", "PTE Academic", "Cambridge English", "Duolingo English Test"] as const;
 export const FRENCH_TESTS = ["DELF", "DALF", "TCF", "TCF DAP", "TCF IRN", "TEF", "TEF Études"] as const;
 export type LanguageTestType = typeof ENGLISH_TESTS[number] | typeof FRENCH_TESTS[number];
@@ -45,6 +47,7 @@ export type StudentProfile = {
   workExperiences: WorkExperience[];
   internships: WorkExperience[];
   targetCountries: string[];
+  targetCountryCodes: TargetCountryCode[];
   targetSubjects: string[];
   targetDegreeLevel: "本科" | "硕士" | "博士" | null;
   targetIntake: { year: number | null; term: "spring" | "summer" | "fall" | null };
@@ -66,6 +69,7 @@ export const emptyStudentProfile: StudentProfile = {
   workExperiences: [],
   internships: [],
   targetCountries: [],
+  targetCountryCodes: [],
   targetSubjects: [],
   targetDegreeLevel: null,
   targetIntake: { year: null, term: null },
@@ -104,11 +108,13 @@ export function normalizeStudentProfile(raw: Record<string, unknown> | null | un
   }) : legacyEducation;
   const languageTests = Array.isArray(raw.languageTests) ? raw.languageTests.map((x, i) => normalizeLanguageTest(x as Partial<LanguageTest>, i)).filter((x): x is LanguageTest => Boolean(x)) : [];
   const intake = raw.targetIntake as { year?: unknown; term?: unknown } | undefined;
+  const targetCountryCodes = normalizeCountryCodes(raw.targetCountryCodes, raw.targetCountries);
   return {
     name: nullableString(raw.name), educationHistory, languageTests,
     workExperiences: Array.isArray(raw.workExperiences) ? raw.workExperiences as WorkExperience[] : [],
     internships: Array.isArray(raw.internships) ? raw.internships as WorkExperience[] : [],
-    targetCountries: Array.isArray(raw.targetCountries) ? raw.targetCountries.filter((x): x is string => typeof x === "string") : [],
+    targetCountries: targetCountryCodes.length ? targetCountryCodes.map(countryLabel) : Array.isArray(raw.targetCountries) ? raw.targetCountries.filter((x): x is string => typeof x === "string") : [],
+    targetCountryCodes,
     targetSubjects: Array.isArray(raw.targetSubjects) ? raw.targetSubjects.filter((x): x is string => typeof x === "string") : [],
     targetDegreeLevel: raw.targetDegreeLevel === "本科" || raw.targetDegreeLevel === "硕士" || raw.targetDegreeLevel === "博士" ? raw.targetDegreeLevel : null,
     targetIntake: { year: nullableNumber(intake?.year), term: intake?.term === "spring" || intake?.term === "summer" || intake?.term === "fall" ? intake.term : null },
@@ -137,4 +143,3 @@ export function writeStudentProfile(profile: StudentProfile) {
   window.dispatchEvent(new Event("atlas-student-profile-change")); window.dispatchEvent(new Event("atlas-planning-state-change"));
 }
 export function profileDisplay(value: string | number | null | undefined) { return value === null || value === undefined || value === "" ? "未提供/待确认" : String(value); }
-

@@ -20,6 +20,7 @@ const secondaryButton = "inline-flex items-center justify-center gap-2 rounded-f
 type VerificationState = "idle" | "loading" | "success" | "error";
 
 export function MaterialsWorkspaceClient({ school, applicationId }: { school: SchoolRecommendation; applicationId: string }) {
+  const uploadsEnabled = process.env.NEXT_PUBLIC_SENSITIVE_UPLOADS_ENABLED === "true" && Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
   const record = useMemo<ApplicationRecord>(() => readApplicationRecords().find((item) => item.id === applicationId) ?? {
     id: applicationId, planningRunId: readActivePlanningRun()?.id ?? "legacy", schoolRecommendationId: school.id, universityName: school.universityName, programName: school.programName,
     country: school.country, intake: school.intake, status: "materials_in_progress", detectedMaterialCount: school.materialsReady, preparedMaterials: school.materialsReady,
@@ -90,7 +91,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
     setActiveRequirement(requirement);
   }
 
-  function openPicker(materialId: string) { setPreviewId(materialId); fileInputRef.current?.click(); }
+  function openPicker(materialId: string) { if (!uploadsEnabled) { setNotice("Demo Mode：真实敏感文件上传尚未开放，请勿上传护照、成绩单或资金证明。"); return; } setPreviewId(materialId); fileInputRef.current?.click(); }
   function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file || !previewId) return;
@@ -231,5 +232,4 @@ function MaterialRow({ material, status, fileName, onUpload, onConfirm, onPrevie
   const confirmed = status === "prepared" || status === "confirmed"; const waiting = status === "uploading" || status === "processing"; const rejected = status === "rejected";
   return <div className={`rounded-2xl border p-4 ${confirmed ? "border-[#c9dbc5] bg-[#e7ece7]" : rejected ? "border-[#e7d0c7] bg-[#f6e7df]" : "border-[#e8dfd3] bg-[#fffaf3]"}`}><div className="flex items-start justify-between gap-3"><div className="flex gap-3">{confirmed ? <CheckCircle2 className="mt-0.5 shrink-0 text-[#5f805f]" size={19} /> : <CircleAlert className="mt-0.5 shrink-0 text-[#9a6257]" size={19} />}<div><p className="font-medium text-[#2f2924]">{material.name}</p><p className={`mt-1 text-xs ${confirmed ? "text-[#4f6d54]" : rejected ? "text-[#8a5f54]" : "text-[#6f6256]"}`}>{materialLabels[status] ?? "未检测到"}</p></div></div>{material.reusableFor.includes("all") ? <span className="text-xs text-[#6f6256]">可复用</span> : null}</div><p className="mt-3 text-sm leading-6 text-[#6f6256]">{material.note}</p>{fileName ? <p className="mt-2 truncate text-xs text-[#8f847a]">文件：{fileName}</p> : null}<div className="mt-3 flex flex-wrap gap-2">{confirmed ? <><button type="button" onClick={onPreview} className="inline-flex items-center gap-2 text-xs text-[#4f6d54] underline underline-offset-4"><Copy size={14} />预览材料</button><button type="button" onClick={onUpload} className="inline-flex items-center gap-2 text-xs text-[#6f6256] underline underline-offset-4"><Upload size={14} />替换材料</button></> : waiting ? <button type="button" disabled className="rounded-full bg-[#e8dfd3] px-4 py-2 text-xs text-[#8f847a]">{materialLabels[status]}……</button> : status === "needs_confirmation" ? <button type="button" onClick={onConfirm} className="rounded-full bg-[#5f805f] px-4 py-2 text-xs font-medium text-white">确认材料</button> : <button type="button" onClick={onUpload} className="inline-flex items-center gap-2 rounded-full border border-[#d8ccbe] bg-[#f7f0e8] px-4 py-2 text-xs font-medium text-[#4a3d34]"><FileUp size={14} />{rejected ? "重新上传" : "上传材料"}</button>}</div></div>;
 }
-
 

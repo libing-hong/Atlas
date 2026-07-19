@@ -2,11 +2,17 @@ import { notFound } from "next/navigation";
 import { LegalLayout } from "@/components/legal/LegalLayout";
 import { legalDocuments, LegalDocumentType, thirdPartyProcessors } from "@/lib/legal-data";
 import Link from "next/link";
+import type { Metadata } from "next";
 
 const validTypes = Object.keys(legalDocuments) as LegalDocumentType[];
 
 export function generateStaticParams() {
   return validTypes.map((type) => ({ type }));
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ type: string }> }): Promise<Metadata> {
+  const { type } = await params; const document = legalDocuments[type as LegalDocumentType];
+  return { title: document?.title ?? "法律与隐私", description: document?.summary, robots: { index: false, follow: false } };
 }
 
 export default async function LegalDocumentPage({ params }: { params: Promise<{ type: string }> }) {

@@ -13,6 +13,7 @@ import { emptyStudentProfile, writeStudentProfile, type StudentProfile } from "@
 import { readActivePlanningRun, readPlanningRun, readRecommendationCandidates, readRunComparisonSelection, updatePlanningRun, writeRecommendationCandidates, writeRunComparisonSelection } from "@/lib/planning-store";
 import type { OrchestratorEvent, ProgrammeCandidate } from "@/lib/recommendation/types";
 import { getCandidatePresentation } from "@/lib/recommendation/presentation";
+import { SERVICE_CATALOG } from "@/lib/service-catalog";
 
 const categoryCopy: Record<RecommendationCategory, { label: string; description: string }> = {
   reach: { label: "冲刺选择", description: "与目标匹配，但录取要求相对较高，需要重点准备申请材料。" },
@@ -212,11 +213,11 @@ function ServiceChoice({ selectedCount, onCancel, onSelf, onSubmission, onConsul
     setBusy(key);
     action();
   }
-  const total = formatCNYFromFen(selectedCount * 2990);
+  const total = formatCNYFromFen(selectedCount * SERVICE_CATALOG.submission.amount * 100);
   return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#2f2924]/20 p-4 md:items-center"><div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[24px] bg-[#fffaf3] p-6 shadow-2xl md:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.24em] text-[#9a8b7c]">确认申请名单</p><h2 className="mt-2 font-editorial text-4xl font-semibold text-[#2f2924]">选择如何完成申请</h2></div><button type="button" onClick={onCancel} disabled={Boolean(busy)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[#d8ccbe] text-[#5d5148] disabled:opacity-40" aria-label="关闭"><X size={17} /></button></div><p className="mt-3 text-sm leading-6 text-[#6f6256]">你已确认 {selectedCount} 所学校。完整规划和学校推荐免费开放，接下来选择最适合你的方式。</p><div className="mt-6 grid gap-3">
     <button type="button" disabled={Boolean(busy)} onClick={() => run("diy", onSelf)} className="rounded-2xl border border-[#d8ccbe] bg-[#f7f0e8] p-4 text-left transition hover:bg-[#f1e7dc] disabled:opacity-55"><strong className="block text-[#2f2924]">{busy === "diy" ? "正在创建申请工作区…" : "自己准备申请 · 免费"}</strong><span className="mt-1 block text-sm text-[#6f6256]">创建申请记录、公开要求对照和材料清单。</span></button>
-    <button type="button" disabled={Boolean(busy)} onClick={() => run("submission", onSubmission)} className="rounded-2xl bg-[#2f2924] p-4 text-left text-[#fffaf3] transition hover:bg-[#493d34] disabled:opacity-55"><strong className="block">{busy === "submission" ? "正在生成订单…" : `交给 Atlas 递交 · ${formatCNY(29.9)}／学校`}</strong><span className="mt-1 block text-sm text-[#eee5db]">当前 {selectedCount} 所合计 {total}；正式提交前仍由你确认。</span></button>
-    <button type="button" disabled={Boolean(busy)} onClick={() => run("advisor", onConsultation)} className="rounded-2xl border border-[#d8ccbe] p-4 text-left transition hover:bg-[#f7f0e8] disabled:opacity-55"><strong className="block text-[#2f2924]">{busy === "advisor" ? "正在生成订单…" : `预约一对一留学规划 · ${formatCNY(299)}／次`}</strong><span className="mt-1 block text-sm text-[#6f6256]">人工复核背景、方向和申请优先级。</span></button>
+    <button type="button" disabled={Boolean(busy)} onClick={() => run("submission", onSubmission)} className="rounded-2xl bg-[#2f2924] p-4 text-left text-[#fffaf3] transition hover:bg-[#493d34] disabled:opacity-55"><strong className="block">{busy === "submission" ? "正在生成订单…" : `交给 Atlas 递交 · ${formatCNY(SERVICE_CATALOG.submission.amount)}／学校`}</strong><span className="mt-1 block text-sm text-[#eee5db]">当前 {selectedCount} 所合计 {total}；正式提交前仍由你确认。</span></button>
+    <button type="button" disabled={Boolean(busy)} onClick={() => run("advisor", onConsultation)} className="rounded-2xl border border-[#d8ccbe] p-4 text-left transition hover:bg-[#f7f0e8] disabled:opacity-55"><strong className="block text-[#2f2924]">{busy === "advisor" ? "正在生成订单…" : `预约一对一留学规划 · ${formatCNY(SERVICE_CATALOG.consultation.amount)}／次`}</strong><span className="mt-1 block text-sm text-[#6f6256]">人工复核背景、方向和申请优先级。</span></button>
     <button type="button" disabled={Boolean(busy)} onClick={() => run("full", onFullService)} className="rounded-2xl border border-[#d8ccbe] p-4 text-left transition hover:bg-[#f7f0e8] disabled:opacity-55"><strong className="block text-[#2f2924]">{busy === "full" ? "正在打开服务方案…" : "查看国家全流程服务"}</strong><span className="mt-1 block text-sm text-[#6f6256]">英国／澳洲 ${formatCNY(4999)}，法国 ${formatCNY(6999)}；按国家选择。</span></button>
   </div><p className="mt-5 text-xs leading-5 text-[#8f847a]">服务不代表保证录取；学校申请费、签证费及第三方官方费用以结算页说明为准。</p></div></div>;
 }

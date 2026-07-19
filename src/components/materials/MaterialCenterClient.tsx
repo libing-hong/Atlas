@@ -62,13 +62,15 @@ export function MaterialCenterClient({
               <button
                 key={title}
                 type="button"
-                className="rounded-[20px] border border-[#d8ccbe] bg-[#f7f0e8] p-4 text-left transition hover:bg-[#f3ece3]"
+                disabled
+                aria-label={`${title}（即将开放）`}
+                className="cursor-not-allowed rounded-[20px] border border-[#d8ccbe] bg-[#f7f0e8] p-4 text-left opacity-70"
               >
                 <Upload size={18} className="text-[#8ea08b]" />
                 <span className="mt-3 block text-sm font-semibold text-[#2f2924]">{title}</span>
                 <span className="mt-2 block text-sm leading-6 text-[#6f6256]">{description}</span>
                 <span className="mt-3 block text-xs uppercase tracking-[0.18em] text-[#9a8b7c]">
-                  <T en="Prepare upload" zh="准备上传" />
+                  <T en="Coming soon" zh="即将开放" />
                 </span>
               </button>
             ))}

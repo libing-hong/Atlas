@@ -1,5 +1,6 @@
 import { formatCNY } from "./format-currency";
 import { getAdmissionKnowledge } from "./admission-knowledge";
+import { SERVICE_CATALOG } from "./service-catalog";
 
 export type ApplicationHomeState =
   | "report_missing"
@@ -205,10 +206,10 @@ export function getApplicationServiceRecommendation({
       type: "france_consultation" as const,
       title: "法国申请需要先确认整体方案",
       description: "法国申请可能同时涉及学校申请、Études en France、面试和签证准备。建议先确认整体方案。",
-      cta: `预约一对一留学规划 ${formatCNY(299)}／次`,
+      cta: `预约一对一留学规划 ${formatCNY(SERVICE_CATALOG.consultation.amount)}／次`,
       href: "/dashboard/order-application?service=consultation",
       details: ["学校申请路径", "Études en France / Campus France", "材料与面试安排", "后续签证准备"],
-      notice: consultationPurchased ? "一对一留学规划咨询已预约" : `一对一留学规划咨询 ${formatCNY(299)}／次。`,
+      notice: consultationPurchased ? "一对一留学规划咨询已预约" : `一对一留学规划咨询 ${formatCNY(SERVICE_CATALOG.consultation.amount)}／次。`,
     };
   }
   if (confirmedApplications.length >= 2) {
@@ -226,7 +227,7 @@ export function getApplicationServiceRecommendation({
       type: "single_school_service" as const,
       title: "不想自己填写申请系统？",
       description: "Atlas 可以帮助你审核材料、填写学校申请系统、正式递交并跟踪学校回复。",
-      cta: `购买单校申请递交 ${formatCNY(29.9)}／学校`,
+      cta: `购买单校申请递交 ${formatCNY(SERVICE_CATALOG.submission.amount)}／学校`,
       href: "/dashboard/order-application?service=single-school",
       details: ["人工审核申请材料", "填写学校申请系统", "正式递交并同步申请编号", "跟踪学校回复"],
     };
@@ -235,10 +236,10 @@ export function getApplicationServiceRecommendation({
     type: "selection_consultation" as const,
     title: "不确定如何选择学校？",
     description: "顾问可以根据你的背景、预算和申请目标，帮助你确认学校组合与申请优先级。",
-    cta: `预约一对一留学规划 ${formatCNY(299)}／次`,
+    cta: `预约一对一留学规划 ${formatCNY(SERVICE_CATALOG.consultation.amount)}／次`,
     href: "/dashboard/order-application?service=consultation",
     details: ["学校组合建议", "申请优先级", "主要风险说明"],
-    notice: `一对一留学规划咨询 ${formatCNY(299)}／次。`,
+    notice: `一对一留学规划咨询 ${formatCNY(SERVICE_CATALOG.consultation.amount)}／次。`,
   };
 }
 
@@ -264,7 +265,7 @@ export const applicationStateCopy: Record<ApplicationHomeState, {
     description: "Atlas 将仅展示当前已核验且与你资料匹配的项目。",
     prepared: ["学校匹配结果", "录取要求对比", "学费与截止日期", "主要申请风险"],
     cta: "查看推荐学校",
-    secondary: `预约一对一留学规划 ${formatCNY(299)}／次`,
+    secondary: `预约一对一留学规划 ${formatCNY(SERVICE_CATALOG.consultation.amount)}／次`,
   },
   school_confirmed: {
     title: "准备第一所学校的申请材料",
@@ -311,7 +312,6 @@ export const applicationStateCopy: Record<ApplicationHomeState, {
     cta: "查看并处理 Offer",
   },
 };
-
 
 
 

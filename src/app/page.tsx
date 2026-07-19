@@ -2,13 +2,15 @@ import Link from "next/link";
 import { ArrowRight, Check, Sparkles } from "lucide-react";
 import { Card } from "@/components/Card";
 import { TopNav } from "@/components/PageShell";
+import { formatCNY } from "@/lib/format-currency";
+import { SERVICE_CATALOG } from "@/lib/service-catalog";
 
 const flow = ["免费规划", "AI报告", "DIY申请/文书", "Offer追踪"];
 const prices = [
-  { name: "完整申请规划", price: "免费", note: "完整分析、学校推荐、要求对照与申请时间规划" },
-  { name: "一对一留学规划咨询", price: "￥299／次", note: "人工复核背景、方向和申请优先级" },
-  { name: "单校申请递交", price: "￥29.9／学校", note: "根据确认信息完成申请系统填写与递交" },
-  { name: "文书服务", price: "¥500/份", note: "PS / CV / 推荐信方向打磨" },
+  { name: SERVICE_CATALOG.planning.name, price: "免费", note: "完整分析、学校推荐、要求对照与申请时间规划" },
+  { name: SERVICE_CATALOG.consultation.name, price: `${formatCNY(SERVICE_CATALOG.consultation.amount)}／${SERVICE_CATALOG.consultation.unit}`, note: "人工复核背景、方向和申请优先级" },
+  { name: SERVICE_CATALOG.submission.name, price: `${formatCNY(SERVICE_CATALOG.submission.amount)}／${SERVICE_CATALOG.submission.unit}`, note: "根据确认信息完成申请系统填写与递交" },
+  { name: SERVICE_CATALOG.essay.name, price: `${formatCNY(SERVICE_CATALOG.essay.amount)}／${SERVICE_CATALOG.essay.unit}`, note: "PS / CV / 推荐信方向打磨" },
 ];
 
 export default function Home() {
@@ -47,7 +49,7 @@ export default function Home() {
           </div>
           <Card className="relative overflow-hidden p-7">
             <div className="absolute right-8 top-8 h-24 w-24 rounded-full border border-[#d7c8ad]" />
-            <p className="text-xs uppercase tracking-[0.28em] text-[#9a8b7c]">Parisian minimal SaaS</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-[#9a8b7c]">Verified planning, clear next steps</p>
             <h2 className="mt-5 font-editorial text-5xl font-semibold text-[#2f2924]">Atlas Report</h2>
             <div className="mt-8 space-y-4">
               {["竞争力评分 82/100", "英国匹配度 88%", "法国精品商学院路径", "3 周材料行动表"].map((item) => (
@@ -114,4 +116,3 @@ export default function Home() {
     </>
   );
 }
-
