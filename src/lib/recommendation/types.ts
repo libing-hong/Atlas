@@ -1,6 +1,6 @@
 import type { CrossDisciplinePreference, LanguageTest } from "../student-profile";
 
-export type VerificationStatus = "verified" | "partially_verified" | "pending" | "unavailable";
+export type VerificationStatus = "verified" | "partially_verified" | "pending" | "rejected";
 export type AssessmentStatus = "meets" | "does_not_meet" | "pending";
 export type FieldRelation = "synonym" | "highly_related" | "adjacent" | "cross_discipline";
 export type RecommendationBand = "reach" | "target" | "safer" | "needs_confirmation" | "currently_not_suitable";
@@ -46,4 +46,3 @@ export type OrchestratorStage = "profile_understanding" | "field_expansion" | "i
 export type OrchestratorEvent = { stage: OrchestratorStage; label: string; status: "running" | "completed"; detail?: string };
 export type RecommendationDebug = { initialCandidates: number; afterCountryFilter: number; afterDegreeFilter: number; afterSubjectMatch: number; afterEligibilityCheck: number; afterValidation: number; openAIRequestStarted?: boolean; model?: string; promptVersion?: string; aiCandidatesReturned?: number; atlasSchoolMatches?: number; atlasProgramMatches?: number; pendingVerification?: number; verifiedRecommendations?: number; excluded?: number };
 export type OrchestratorResult = { profile: UnderstoodProfile; expansions: FieldExpansion[]; candidates: ProgrammeCandidate[]; reviewQueue: RejectedProgrammeLead[]; events: OrchestratorEvent[]; fallbackLevel: number; emptyReason?: string; debug: RecommendationDebug; supervisor: { sufficient: boolean; issues: string[]; discoveryPasses: number } };
-
