@@ -1,14 +1,17 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowUpRight, Check, CheckCircle2, CircleAlert, Copy, FileUp, LoaderCircle, Upload, X } from "lucide-react";
 import { Card } from "@/components/Card";
-import { ApplicationMode, getMaterialsForApplication, readApplicationMode, readApplicationRecords, updateApplicationRecord } from "@/lib/application-store";
+import { ApplicationMode, createApplicationSubmissionOrder, createFixedServiceOrder, getMaterialsForApplication, readApplicationMode, readApplicationRecords, updateApplicationRecord, writeApplicationMode } from "@/lib/application-store";
 import { AdmissionRequirement, ApplicationMaterial, ApplicationRecord, getAdmissionRequirements, RequirementStatus, SchoolRecommendation } from "@/lib/application-prototype-data";
 import { getAdmissionKnowledge } from "@/lib/admission-knowledge";
 import { readActivePlanningRun } from "@/lib/planning-store";
 import { readStudentProfile, StudentProfile, writeStudentProfile, profileDisplay } from "@/lib/student-profile";
 import { confirmRecognizedMaterial, recognizeMaterial, type MaterialKind, type RecognizedMaterial } from "@/lib/material-recognition";
+import { listStoredMaterials, saveMaterialFile, subscribeMaterialLibrary, type StoredMaterial } from "@/lib/material-repository";
+import { MaterialPreviewDialog } from "@/components/materials/MaterialPreviewDialog";
 import { MotivationLetterVip } from "./MotivationLetterVip";
 
 const requirementLabels: Record<RequirementStatus, string> = { meets: "已达标", mostly_meets: "基本符合", needs_confirmation: "需要确认", gap_detected: "尚未达标", unknown: "信息不足" };
@@ -20,6 +23,7 @@ const secondaryButton = "inline-flex items-center justify-center gap-2 rounded-f
 type VerificationState = "idle" | "loading" | "success" | "error";
 
 export function MaterialsWorkspaceClient({ school, applicationId }: { school: SchoolRecommendation; applicationId: string }) {
+  const router = useRouter();
   const uploadsEnabled = process.env.NEXT_PUBLIC_SENSITIVE_UPLOADS_ENABLED === "true" && Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
   const record = useMemo<ApplicationRecord>(() => readApplicationRecords().find((item) => item.id === applicationId) ?? {
     id: applicationId, planningRunId: readActivePlanningRun()?.id ?? "legacy", schoolRecommendationId: school.id, universityName: school.universityName, programName: school.programName,
@@ -36,7 +40,11 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
   });
   const [files, setFiles] = useState<Record<string, string>>({});
   const [recognizedFiles, setRecognizedFiles] = useState<Record<string, RecognizedMaterial>>({});
-  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [uploadTargetId, setUploadTargetId] = useState<string | null>(null);
+  const [storedMaterials, setStoredMaterials] = useState<StoredMaterial[]>([]);
+  const [materialLinks, setMaterialLinks] = useState<Record<string, string>>(() => { if (typeof window === "undefined") return {}; try { return JSON.parse(window.localStorage.getItem(`atlas.application-material-links.${applicationId}`) ?? "{}") as Record<string, string>; } catch { return {}; } });
+  const [previewMaterial, setPreviewMaterial] = useState<StoredMaterial | null>(null);
+  const [submissionOpen, setSubmissionOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [activeRequirement, setActiveRequirement] = useState<AdmissionRequirement | null>(null);
   const [confirmedIds, setConfirmedIds] = useState<string[]>([]);
@@ -53,6 +61,12 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
       } catch { /* Ignore invalid prototype data and use defaults. */ }
     }, 0);
     return () => window.clearTimeout(timer);
+  }, [applicationId]);
+
+  useEffect(() => {
+    const refresh = () => setStoredMaterials(listStoredMaterials());
+    refresh();
+    return subscribeMaterialLibrary(refresh);
   }, [applicationId]);
 
   const effectiveConfirmedIds = confirmedIds;
@@ -83,23 +97,28 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
     setActiveRequirement(requirement);
   }
 
-  function openPicker(materialId: string) { setPreviewId(materialId); if (!uploadsEnabled) setNotice("Prototype Mode：本次仅记录文件名称与模拟状态，文件内容不会上传。请使用测试文件。"); fileInputRef.current?.click(); }
+  function persistMaterialLink(materialId: string, stored: StoredMaterial) { setMaterialLinks((current) => { const next = { ...current, [materialId]: stored.id }; window.localStorage.setItem(`atlas.application-material-links.${applicationId}`, JSON.stringify(next)); return next; }); setFiles((current) => ({ ...current, [materialId]: stored.name })); }
+  function openPicker(materialId: string) { setUploadTargetId(materialId); if (!uploadsEnabled) setNotice("Prototype Mode：文件只保存在当前浏览器的材料库，不会上传到服务器。请使用测试文件。"); fileInputRef.current?.click(); }
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (!file || !previewId) return;
-    const material = baseMaterials.find((item) => item.id === previewId);
+    if (!file || !uploadTargetId) return;
+    const material = baseMaterials.find((item) => item.id === uploadTargetId);
     if (!material) return;
-    setFiles((current) => ({ ...current, [previewId]: file.name }));
-    if (!uploadsEnabled) window.localStorage.setItem(`atlas.prototype.material.${applicationId}.${previewId}`, JSON.stringify({ name: file.name, size: file.size, selectedAt: new Date().toISOString() }));
-    setStatuses((current) => ({ ...current, [previewId]: "processing" }));
+    setStatuses((current) => ({ ...current, [uploadTargetId]: "processing" }));
     const result = await recognizeMaterial(file, materialHint(material.name));
-    setRecognizedFiles((current) => ({ ...current, [previewId]: result }));
+    const stored = await saveMaterialFile(file, result.kind, applicationId);
+    persistMaterialLink(uploadTargetId, stored);
+    setRecognizedFiles((current) => ({ ...current, [uploadTargetId]: result }));
     const looksWrong = material.name.includes("推荐") && result.kind !== "recommendation";
-    if (looksWrong) { setStatuses((current) => ({ ...current, [previewId]: "rejected" })); setNotice("识别结果与推荐信材料类型不一致，请检查后重新上传。"); }
-    else { setStatuses((current) => ({ ...current, [previewId]: "needs_confirmation" })); setNotice(`Atlas 已识别：${result.summary.join("；")}。请确认后写入系统。`); }
+    if (looksWrong) { setStatuses((current) => ({ ...current, [uploadTargetId]: "rejected" })); setNotice("识别结果与推荐信材料类型不一致，请检查后重新上传。"); }
+    else { setStatuses((current) => ({ ...current, [uploadTargetId]: "needs_confirmation" })); setNotice(`Atlas 已识别并同步到材料中心：${result.summary.join("；")}。请确认后写入系统。`); }
     event.target.value = "";
   }
   function confirmFile(material: ApplicationMaterial) { const recognized = recognizedFiles[material.id]; if (recognized) { confirmRecognizedMaterial(recognized); setProfile(readStudentProfile()); } setStatuses((current) => { const next = { ...current, [material.id]: "confirmed" }; syncMaterialStatus(next); return next; }); setNotice("Atlas 已写入识别结果，并同步更新材料状态、学生资料、申请进度和当前事项。"); }
+  function reuseMaterial(material: ApplicationMaterial, storedId: string) { const stored = storedMaterials.find((item) => item.id === storedId); if (!stored) return; persistMaterialLink(material.id, stored); setStatuses((current) => ({ ...current, [material.id]: "needs_confirmation" })); setNotice(`${stored.name} 已从材料中心关联到本申请，请确认材料。`); }
+  function preview(material: ApplicationMaterial) { const stored = storedMaterials.find((item) => item.id === materialLinks[material.id]); if (stored) setPreviewMaterial(stored); else setNotice("这是一条旧的材料状态记录，没有可预览文件。请重新上传或从材料中心选择文件。"); }
+  const allMaterialsReady = baseMaterials.length > 0 && baseMaterials.every((material) => ["prepared", "confirmed"].includes(statuses[material.id] ?? material.status));
+  function chooseService(service: "diy" | "single" | "uk" | "france") { const current = readApplicationRecords().find((item) => item.id === applicationId) ?? record; if (service === "diy") { writeApplicationMode("DIY"); setApplicationMode("DIY"); setSubmissionOpen(false); setNotice("已选择用户自行提交（免费）。请使用上方已核验的官方申请入口完成提交。"); return; } if (service === "single") { createApplicationSubmissionOrder([current]); router.push("/checkout/application-submission"); return; } createFixedServiceOrder(service === "uk" ? "full_service_uk_au" : "full_service_france", readApplicationRecords()); router.push(`/checkout/full-service?country=${service === "uk" ? "uk-au" : "france"}`); }
 
   function currentRequirement(requirement: AdmissionRequirement) {
     if (effectiveConfirmedIds.includes(requirement.id)) {
@@ -134,9 +153,10 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
     </Card>
     <MotivationLetterVip school={school} applicationId={applicationId} />
 
-    <Card><div className="flex items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.22em] text-[#9a8b7c]">材料状态</p><h2 className="mt-2 font-editorial text-3xl font-semibold text-[#2f2924]">申请材料</h2><p className="mt-2 text-sm leading-6 text-[#6f6256]">Atlas 会将已上传的通用材料自动关联到符合要求的学校。</p></div><span className="text-sm text-[#8f847a]">已确认 {Object.values(statuses).filter((status) => status === "prepared" || status === "confirmed").length} 项</span></div><div className="mt-5 grid gap-3 md:grid-cols-2">{baseMaterials.map((material) => <MaterialRow key={material.id} material={material} status={statuses[material.id] ?? material.status} fileName={files[material.id]} onUpload={() => openPicker(material.id)} onConfirm={() => confirmFile(material)} onPreview={() => setNotice(`${material.name} 当前文件：${files[material.id] ?? "Atlas 已检测到的材料"}`)} />)}</div></Card>
+    <Card><div className="flex items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.22em] text-[#9a8b7c]">材料状态</p><h2 className="mt-2 font-editorial text-3xl font-semibold text-[#2f2924]">申请材料</h2><p className="mt-2 text-sm leading-6 text-[#6f6256]">Atlas 会将上传的通用材料同步到材料中心，并可用于其他学校。</p></div><span className="text-sm text-[#8f847a]">已确认 {Object.values(statuses).filter((status) => status === "prepared" || status === "confirmed").length} 项</span></div><div className="mt-5 grid gap-3 md:grid-cols-2">{baseMaterials.map((material) => <MaterialRow key={material.id} material={material} status={statuses[material.id] ?? material.status} fileName={files[material.id]} reusable={storedMaterials.filter((item) => !materialHint(material.name) || item.kind === materialHint(material.name))} onReuse={(id) => reuseMaterial(material, id)} onUpload={() => openPicker(material.id)} onConfirm={() => confirmFile(material)} onPreview={() => preview(material)} />)}</div>{allMaterialsReady ? <div className="mt-6 border-t border-[#e8dfd3] pt-5"><button type="button" onClick={() => setSubmissionOpen((value) => !value)} className={greenButton}>提交申请<ArrowUpRight size={16} /></button>{submissionOpen ? <SubmissionChoices onChoose={chooseService} /> : null}</div> : null}</Card>
 
     {activeRequirement ? <RequirementConfirmModal requirement={activeRequirement} materialStatuses={statuses} profile={profile} onProfileChange={(next) => { writeStudentProfile(next); setProfile(next); }} onClose={() => setActiveRequirement(null)} onMessage={setNotice} onConfirm={async () => { await new Promise((resolve) => window.setTimeout(resolve, 650)); persistConfirmations([...new Set([...confirmedIds, activeRequirement.id])]); setActiveRequirement(null); setNotice(`${activeRequirement.label}已确认，Atlas 已重新计算录取要求状态。`); }} /> : null}
+    {previewMaterial ? <MaterialPreviewDialog material={previewMaterial} onClose={() => setPreviewMaterial(null)} /> : null}
   </div>;
 }
 
@@ -216,8 +236,13 @@ function MaterialChecklist({ materialStatuses }: { materialStatuses: Record<stri
 function Cell({ label, children }: { label: string; children: React.ReactNode }) { return <div><p className="text-xs text-[#9a8b7c] md:hidden">{label}</p>{children}</div>; }
 function StatusBadge({ status }: { status: RequirementStatus }) { return <span className={`inline-flex rounded-full border px-3 py-1 text-xs ${status === "meets" || status === "mostly_meets" ? "border-[#c9dbc5] bg-[#e7ece7] text-[#4f6d54]" : status === "gap_detected" ? "border-[#e7d0c7] bg-[#f6e7df] text-[#8a5f54]" : "border-[#d8ccbe] bg-[#f7f0e8] text-[#6f6256]"}`}>{requirementLabels[status]}</span>; }
 
-function MaterialRow({ material, status, fileName, onUpload, onConfirm, onPreview }: { material: ApplicationMaterial; status: string; fileName?: string; onUpload: () => void; onConfirm: () => void; onPreview: () => void }) {
+function MaterialRow({ material, status, fileName, reusable, onReuse, onUpload, onConfirm, onPreview }: { material: ApplicationMaterial; status: string; fileName?: string; reusable: StoredMaterial[]; onReuse: (id: string) => void; onUpload: () => void; onConfirm: () => void; onPreview: () => void }) {
   const confirmed = status === "prepared" || status === "confirmed"; const waiting = status === "uploading" || status === "processing"; const rejected = status === "rejected";
-  return <div className={`rounded-2xl border p-4 ${confirmed ? "border-[#c9dbc5] bg-[#e7ece7]" : rejected ? "border-[#e7d0c7] bg-[#f6e7df]" : "border-[#e8dfd3] bg-[#fffaf3]"}`}><div className="flex items-start justify-between gap-3"><div className="flex gap-3">{confirmed ? <CheckCircle2 className="mt-0.5 shrink-0 text-[#5f805f]" size={19} /> : <CircleAlert className="mt-0.5 shrink-0 text-[#9a6257]" size={19} />}<div><p className="font-medium text-[#2f2924]">{material.name}</p><p className={`mt-1 text-xs ${confirmed ? "text-[#4f6d54]" : rejected ? "text-[#8a5f54]" : "text-[#6f6256]"}`}>{materialLabels[status] ?? "未检测到"}</p></div></div>{material.reusableFor.includes("all") ? <span className="text-xs text-[#6f6256]">可复用</span> : null}</div><p className="mt-3 text-sm leading-6 text-[#6f6256]">{material.note}</p>{fileName ? <p className="mt-2 truncate text-xs text-[#8f847a]">文件：{fileName}</p> : null}<div className="mt-3 flex flex-wrap gap-2">{confirmed ? <><button type="button" onClick={onPreview} className="inline-flex items-center gap-2 text-xs text-[#4f6d54] underline underline-offset-4"><Copy size={14} />预览材料</button><button type="button" onClick={onUpload} className="inline-flex items-center gap-2 text-xs text-[#6f6256] underline underline-offset-4"><Upload size={14} />替换材料</button></> : waiting ? <button type="button" disabled className="rounded-full bg-[#e8dfd3] px-4 py-2 text-xs text-[#8f847a]">{materialLabels[status]}……</button> : status === "needs_confirmation" ? <button type="button" onClick={onConfirm} className="rounded-full bg-[#5f805f] px-4 py-2 text-xs font-medium text-white">确认材料</button> : <button type="button" onClick={onUpload} className="inline-flex items-center gap-2 rounded-full border border-[#d8ccbe] bg-[#f7f0e8] px-4 py-2 text-xs font-medium text-[#4a3d34]"><FileUp size={14} />{rejected ? "重新上传" : "上传材料"}</button>}</div></div>;
+  return <div className={`rounded-2xl border p-4 ${confirmed ? "border-[#c9dbc5] bg-[#e7ece7]" : rejected ? "border-[#e7d0c7] bg-[#f6e7df]" : "border-[#e8dfd3] bg-[#fffaf3]"}`}><div className="flex items-start justify-between gap-3"><div className="flex gap-3">{confirmed ? <CheckCircle2 className="mt-0.5 shrink-0 text-[#5f805f]" size={19} /> : <CircleAlert className="mt-0.5 shrink-0 text-[#9a6257]" size={19} />}<div><p className="font-medium text-[#2f2924]">{material.name}</p><p className={`mt-1 text-xs ${confirmed ? "text-[#4f6d54]" : rejected ? "text-[#8a5f54]" : "text-[#6f6256]"}`}>{materialLabels[status] ?? "未检测到"}</p></div></div>{material.reusableFor.includes("all") ? <span className="text-xs text-[#6f6256]">可复用</span> : null}</div><p className="mt-3 text-sm leading-6 text-[#6f6256]">{material.note}</p>{fileName ? <p className="mt-2 truncate text-xs text-[#8f847a]">文件：{fileName}</p> : null}<div className="mt-3 flex flex-wrap items-center gap-2">{confirmed ? <><button type="button" onClick={onPreview} className="inline-flex items-center gap-2 text-xs text-[#4f6d54] underline underline-offset-4"><Copy size={14} />预览材料</button><button type="button" onClick={onUpload} className="inline-flex items-center gap-2 text-xs text-[#6f6256] underline underline-offset-4"><Upload size={14} />替换材料</button></> : waiting ? <button type="button" disabled className="rounded-full bg-[#e8dfd3] px-4 py-2 text-xs text-[#8f847a]">{materialLabels[status]}……</button> : status === "needs_confirmation" ? <button type="button" onClick={onConfirm} className="rounded-full bg-[#5f805f] px-4 py-2 text-xs font-medium text-white">确认材料</button> : <button type="button" onClick={onUpload} className="inline-flex items-center gap-2 rounded-full border border-[#d8ccbe] bg-[#f7f0e8] px-4 py-2 text-xs font-medium text-[#4a3d34]"><FileUp size={14} />{rejected ? "重新上传" : "上传材料"}</button>}{!confirmed && !waiting && reusable.length ? <select aria-label={`从材料中心选择${material.name}`} defaultValue="" onChange={(event) => { if (event.target.value) onReuse(event.target.value); }} className="rounded-full border border-[#d8ccbe] bg-[#fffaf3] px-3 py-2 text-xs text-[#4a3d34]"><option value="">从材料中心选择</option>{reusable.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select> : null}</div></div>;
+}
+
+function SubmissionChoices({ onChoose }: { onChoose: (service: "diy" | "single" | "uk" | "france") => void }) {
+  const choices = [{ id: "diy" as const, title: "用户自行提交", price: "免费", detail: "Atlas 提供材料检查，用户前往官方系统自行提交。" }, { id: "single" as const, title: "Atlas 代为提交一所学校", price: "¥29.9", detail: "单所学校申请递交服务。" }, { id: "uk" as const, title: "英国定制申请全包", price: "¥4999", detail: "最多申请 5 所学校，包含签证办理服务。" }, { id: "france" as const, title: "法国定制申请全包", price: "¥6999", detail: "最多申请 5 所学校，包含签证办理服务。" }];
+  return <div className="mt-5 rounded-2xl border border-[#d8ccbe] bg-[#f7f0e8] p-4"><h3 className="font-semibold text-[#2f2924]">选择申请提交方式</h3><div className="mt-4 grid gap-3 md:grid-cols-2">{choices.map((choice) => <button key={choice.id} type="button" onClick={() => onChoose(choice.id)} className="rounded-2xl border border-[#d8ccbe] bg-[#fffaf3] p-4 text-left transition hover:border-[#8fa08b]"><span className="flex items-center justify-between gap-3"><strong className="text-sm text-[#2f2924]">{choice.title}</strong><span className="text-sm font-semibold text-[#4f6d54]">{choice.price}</span></span><span className="mt-2 block text-xs leading-5 text-[#6f6256]">{choice.detail}</span></button>)}</div><p className="mt-4 text-xs leading-5 text-[#8a6d51]">以上价格均不包含学校收取的申请费、签证费及其他第三方费用。</p></div>;
 }
 

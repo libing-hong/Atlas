@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FilePlus2, ShieldCheck, Upload } from "lucide-react";
 import { Card, CardHeader } from "@/components/Card";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -10,6 +10,8 @@ import { MaterialCategory, MaterialDocument } from "@/lib/visual-prototype-data"
 import { cn } from "@/lib/utils";
 import { confirmRecognizedMaterial, recognizeMaterial, type MaterialKind, type RecognizedMaterial } from "@/lib/material-recognition";
 import { SensitiveUploadPanel } from "./SensitiveUploadPanel";
+import { listStoredMaterials, saveMaterialFile, subscribeMaterialLibrary, type StoredMaterial } from "@/lib/material-repository";
+import { MaterialPreviewDialog } from "./MaterialPreviewDialog";
 
 export function MaterialCenterClient({
   categories,
@@ -23,12 +25,15 @@ export function MaterialCenterClient({
   const [category, setCategory] = useState("All");
   const [uploadMessage, setUploadMessage] = useState("");
   const [recognized, setRecognized] = useState<RecognizedMaterial | null>(null);
+  const [storedMaterials, setStoredMaterials] = useState<StoredMaterial[]>([]);
+  const [previewMaterial, setPreviewMaterial] = useState<StoredMaterial | null>(null);
   const { t, text } = useLanguage();
   const filteredDocuments = useMemo(
     () => (category === "All" ? documents : documents.filter((document) => document.category === category)),
     [category, documents],
   );
   const readinessValue = Math.round((readiness.ready / readiness.total) * 100);
+  useEffect(() => { const refresh = () => setStoredMaterials(listStoredMaterials()); refresh(); return subscribeMaterialLibrary(refresh); }, []);
 
   return (
     <div className="space-y-6">
@@ -75,7 +80,7 @@ export function MaterialCenterClient({
                 <span className="mt-3 block text-xs uppercase tracking-[0.18em] text-[#6f856a]">
                   <T en="Choose test file" zh="选择测试文件" />
                 </span>
-                <input type="file" className="sr-only" accept=".pdf,.doc,.docx,.txt,.csv,.png,.jpg,.jpeg" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void recognizeMaterial(file, hint as MaterialKind).then((result) => { setRecognized(result); setUploadMessage(`${title} 已完成材料分类，请确认识别结果。`); }); event.target.value = ""; }} />
+                <input type="file" className="sr-only" accept=".pdf,.doc,.docx,.txt,.csv,.png,.jpg,.jpeg" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void recognizeMaterial(file, hint as MaterialKind).then(async (result) => { await saveMaterialFile(file, result.kind); setRecognized(result); setUploadMessage(`${title} 已完成材料分类并保存到当前浏览器的材料库，请确认识别结果。`); }); event.target.value = ""; }} />
               </label>
             ))}
           </div>
@@ -86,6 +91,7 @@ export function MaterialCenterClient({
 
       <section className="grid gap-6 xl:grid-cols-[0.72fr_1.28fr]">
         <div className="space-y-6">
+          {storedMaterials.length ? <Card><CardHeader title={<T en="Uploaded Material Library" zh="已上传材料库" />} /><p className="mb-4 text-sm text-[#6f6256]">这些文件可在不同学校的申请中直接选择复用。</p><div className="grid gap-3 lg:grid-cols-2">{storedMaterials.map((material) => <article key={material.id} className="rounded-2xl border border-[#c9dbc5] bg-[#e7ece7] p-4"><p className="truncate font-medium text-[#2f2924]">{material.name}</p><p className="mt-1 text-xs text-[#6f6256]">{material.kind} · {(material.size / 1024).toFixed(1)} KB</p><button type="button" onClick={() => setPreviewMaterial(material)} className="mt-3 text-xs text-[#4f6d54] underline underline-offset-4">预览材料</button></article>)}</div></Card> : null}
           <Card>
             <CardHeader title={<T en="Categories" zh="文件分类" />} />
             <div className="space-y-2">
@@ -146,6 +152,7 @@ export function MaterialCenterClient({
           </Card>
         </div>
       </section>
+      {previewMaterial ? <MaterialPreviewDialog material={previewMaterial} onClose={() => setPreviewMaterial(null)} /> : null}
     </div>
   );
 }

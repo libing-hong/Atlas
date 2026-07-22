@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { FileUp, ShieldCheck } from "lucide-react";
 import { confirmRecognizedMaterial, recognizeMaterial, type RecognizedMaterial } from "@/lib/material-recognition";
+import { saveMaterialFile } from "@/lib/material-repository";
 
 export function SensitiveUploadPanel() {
   const serverUploadsEnabled = process.env.NEXT_PUBLIC_SENSITIVE_UPLOADS_ENABLED === "true" && Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
@@ -17,6 +18,7 @@ export function SensitiveUploadPanel() {
     setFileName(file.name);
     setAnalyzing(true);
     const result = await recognizeMaterial(file);
+    await saveMaterialFile(file, result.kind);
     setRecognized(result);
     setAnalyzing(false);
     if (serverUploadsEnabled) {
@@ -24,7 +26,7 @@ export function SensitiveUploadPanel() {
       return;
     }
     window.localStorage.setItem("atlas.prototype.material-selection.v1", JSON.stringify({ name: file.name, size: file.size, selectedAt: new Date().toISOString() }));
-    setMessage("识别已完成。确认识别结果后，Atlas 才会写入学生资料和材料状态；文件内容没有上传到服务器。");
+    setMessage("识别已完成，文件已保存到当前浏览器的材料库。确认后 Atlas 会写入学生资料和材料状态；文件内容没有上传到服务器。");
   }
 
   return (
