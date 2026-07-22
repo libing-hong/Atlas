@@ -1,3 +1,6 @@
+Exit code: 0
+Wall time: 0.8 seconds
+Output:
 import OpenAI from "openai";
 import type { StudentProfile } from "../student-profile";
 import type { ProgrammeCandidate, UnderstoodProfile, VerifiedField, VerifiedProgramme } from "./types";
@@ -25,7 +28,7 @@ export type AIProgramRecommendation = {
 };
 
 export type AIRecommendationProvider = { generate(profile: ApplicantProfile, relaxed?: boolean): Promise<AIProgramRecommendation[]> };
-export type SchoolRecommendationErrorCode = "OPENAI_API_KEY_MISSING" | "OPENAI_AUTHENTICATION_FAILED" | "OPENAI_INSUFFICIENT_QUOTA" | "OPENAI_RATE_LIMITED" | "OPENAI_PERMISSION_DENIED" | "OPENAI_INVALID_RESPONSE" | "OPENAI_REQUEST_FAILED";
+export type SchoolRecommendationErrorCode = "OPENAI_API_KEY_MISSING" | "OPENAI_AUTHENTICATION_FAILED" | "OPENAI_INSUFFICIENT_QUOTA" | "OPENAI_RATE_LIMITED" | "OPENAI_PERMISSION_DENIED" | "OPENAI_TIMEOUT" | "OPENAI_INVALID_RESPONSE" | "OPENAI_REQUEST_FAILED";
 
 export class SchoolRecommendationError extends Error {
   constructor(public readonly code: SchoolRecommendationErrorCode) { super(code); this.name = "SchoolRecommendationError"; }
@@ -34,7 +37,7 @@ export class SchoolRecommendationError extends Error {
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new SchoolRecommendationError("OPENAI_API_KEY_MISSING");
-  return new OpenAI({ apiKey, timeout: 45_000, maxRetries: 1 });
+  return new OpenAI({ apiKey, timeout: 70_000, maxRetries: 0 });
 }
 
 export function normalizeOpenAIError(error: unknown): SchoolRecommendationError {
@@ -44,6 +47,7 @@ export function normalizeOpenAIError(error: unknown): SchoolRecommendationError 
   if (value?.status === 401) return new SchoolRecommendationError("OPENAI_AUTHENTICATION_FAILED");
   if (value?.status === 403) return new SchoolRecommendationError("OPENAI_PERMISSION_DENIED");
   if (value?.status === 429) return new SchoolRecommendationError("OPENAI_RATE_LIMITED");
+  if ((error as { name?: string })?.name === "APIConnectionTimeoutError" || value?.code === "ETIMEDOUT") return new SchoolRecommendationError("OPENAI_TIMEOUT");
   return new SchoolRecommendationError("OPENAI_REQUEST_FAILED");
 }
 
@@ -72,16 +76,16 @@ const boundedSchema = {
   ...schema,
   properties: {
     ...schema.properties,
-    recommendations: { ...schema.properties.recommendations, minItems: 6, maxItems: 10 },
+    recommendations: { ...schema.properties.recommendations, minItems: 6, maxItems: 6 },
   },
 } as const;
 
 export class OpenAIRecommendationProvider implements AIRecommendationProvider {
   async generate(profile: ApplicantProfile, relaxed = false) {
-    const instructions = `You are Atlas's university programme planning engine. Return 6-10 real, specific university degree programmes suitable for the applicant. Only use countries in targetCountries. School and programme names must be separate. Never return books, articles, rankings, marketplaces, training courses, aggregators, or non-higher-education institutions. Do not require an Atlas database match. For every programme, include structured admission requirements for degree, grade, subject background, language, experience, prerequisites, and portfolio/special requirements, together with an applicant assessment. Use a programme's official admissions URL when known. Set requirement to null and status to unknown when a requirement cannot be established; never invent a threshold. Uncertain but plausible programmes may be returned with low confidence and verification queries. Expand subject semantics where useful.${relaxed ? " Use broader related subject names while preserving countries and degree level." : ""}`;
+    const instructions = `You are Atlas's university programme planning engine. Return exactly 6 real, specific university degree programmes suitable for the applicant. Only use countries in targetCountries. School and programme names must be separate. Never return books, articles, rankings, marketplaces, training courses, aggregators, or non-higher-education institutions. Do not require an Atlas database match. For every programme, include structured admission requirements for degree, grade, subject background, language, experience, prerequisites, and portfolio/special requirements, together with an applicant assessment. Use a programme's official admissions URL when known. Set requirement to null and status to unknown when a requirement cannot be established; never invent a threshold. Uncertain but plausible programmes may be returned with low confidence and verification queries. Expand subject semantics where useful.${relaxed ? " Use broader related subject names while preserving countries and degree level." : ""}`;
     try {
       const startedAt = Date.now();
-      const response = await getOpenAIClient().responses.create({ model: RECOMMENDATION_MODEL, reasoning: { effort: "low" }, max_output_tokens: 6_000, instructions, input: JSON.stringify(profile), text: { format: { type: "json_schema", name: "atlas_programme_recommendations", strict: true, schema: boundedSchema } } });
+      const response = await getOpenAIClient().responses.create({ model: RECOMMENDATION_MODEL, reasoning: { effort: "low" }, max_output_tokens: 4_000, instructions, input: JSON.stringify(profile), text: { format: { type: "json_schema", name: "atlas_programme_recommendations", strict: true, schema: boundedSchema } } });
       console.info("[atlas-openai]", { stage: "recommendation_generation", durationMs: Date.now() - startedAt, model: RECOMMENDATION_MODEL, promptVersion: RECOMMENDATION_PROMPT_VERSION, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens });
       if (!response.output_text) throw new SchoolRecommendationError("OPENAI_INVALID_RESPONSE");
       try {
