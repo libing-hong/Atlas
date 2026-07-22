@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 0.8 seconds
-Output:
 import OpenAI from "openai";
 import type { StudentProfile } from "../student-profile";
 import type { ProgrammeCandidate, UnderstoodProfile, VerifiedField, VerifiedProgramme } from "./types";
