@@ -58,6 +58,10 @@ export type ApplicationRecord = {
   nextAction: string;
   nextDeadline?: string;
   serviceType: "none" | "single_school" | "full_service";
+  decisionStatus?: "waiting_result" | "offer_received" | "waitlisted" | "rejected";
+  offerSource?: "student" | "atlas";
+  offerEvidenceAvailable?: boolean;
+  offerFileName?: string;
 };
 
 export type SchoolRecommendation = {

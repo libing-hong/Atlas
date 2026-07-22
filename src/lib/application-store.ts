@@ -133,10 +133,13 @@ export function readApplicationRecords(planningRunId?: string): ApplicationRecor
   if (typeof window === "undefined") return [];
   try {
     const records = JSON.parse(window.localStorage.getItem(recordsKey) ?? "[]") as ApplicationRecord[];
-    const normalized = records.map((record) => {
+    const hasOffer = records.some((record) => record.status === "offer_received" || record.decisionStatus === "offer_received");
+    const normalized = records.map((record, index) => {
       const legacyEmpty = !record.totalMaterials;
       const totalMaterials = legacyEmpty ? commonMaterials.length : record.totalMaterials;
       const preparedMaterials = legacyEmpty ? 0 : record.preparedMaterials;
+      const prototypeOffer = !hasOffer && index === 0;
+      const managedOffer = prototypeOffer && record.serviceType !== "none";
       return {
         ...record,
         planningRunId: record.planningRunId ?? "legacy",
@@ -145,6 +148,11 @@ export function readApplicationRecords(planningRunId?: string): ApplicationRecor
         detectedMaterialCount: legacyEmpty ? 0 : record.detectedMaterialCount ?? preparedMaterials,
         missingMaterials: legacyEmpty ? commonMaterials.map((item) => item.name) : record.missingMaterials,
         applicationProgress: legacyEmpty ? 0 : record.applicationProgress ?? Math.round((preparedMaterials / Math.max(totalMaterials, 1)) * 45),
+        status: prototypeOffer ? "offer_received" as const : record.status,
+        decisionStatus: prototypeOffer ? "offer_received" as const : record.decisionStatus ?? (record.status === "offer_received" ? "offer_received" as const : "waiting_result" as const),
+        offerSource: prototypeOffer ? (managedOffer ? "atlas" as const : "student" as const) : record.offerSource,
+        offerEvidenceAvailable: prototypeOffer ? managedOffer : record.offerEvidenceAvailable,
+        offerFileName: prototypeOffer && managedOffer ? `${record.universityName}-Offer-Letter.pdf` : record.offerFileName,
       };
     });
     return planningRunId ? normalized.filter((record) => record.planningRunId === planningRunId) : normalized;
@@ -359,4 +367,3 @@ export function getMaterialsForApplication(record: ApplicationRecord, school: Sc
     })),
   ];
 }
-

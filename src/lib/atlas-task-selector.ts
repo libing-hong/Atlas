@@ -64,9 +64,9 @@ function taskCopy(record: ApplicationRecord) {
     explanation: "申请已经提交，当前仍处于申请阶段；收到并核验正式 Offer 后才会进入录取阶段。",
   };
   if (record.status === "offer_received") return {
-    title: `核验 ${record.universityName} 正式 Offer`,
-    action: "查看录取信息",
-    explanation: "Atlas 已检测到正式录取结果，请核验 Offer 内容、截止日期和后续条件。",
+    title: record.offerEvidenceAvailable ? `准备 ${record.universityName} 签证材料` : `核验 ${record.universityName} 正式 Offer`,
+    action: record.offerEvidenceAvailable ? "进入签证材料准备" : "查看录取信息",
+    explanation: record.offerEvidenceAvailable ? "录取通知书已经完成同步，Atlas 已根据录取学校、专业和入学时间解锁签证准备阶段。" : "Atlas 已检测到正式录取结果，请上传或同步 Offer，核验内容、截止日期和后续条件。",
   };
   return {
     title: `准备 ${record.universityName} 的申请材料`,
@@ -76,7 +76,7 @@ function taskCopy(record: ApplicationRecord) {
 }
 
 export function getJourneyStagesForApplicationRecords(records: ApplicationRecord[]): JourneyStage[] {
-  const currentIndex = records.some((record) => record.status === "offer_received") ? 1 : 0;
+  const currentIndex = records.some((record) => record.status === "offer_received" && record.offerEvidenceAvailable) ? 2 : records.some((record) => record.status === "offer_received") ? 1 : 0;
   return stageNames.map((name, index) => ({
     id: name.toLowerCase().replaceAll(" ", "-"),
     name,
@@ -84,7 +84,7 @@ export function getJourneyStagesForApplicationRecords(records: ApplicationRecord
     progress: index === currentIndex
       ? currentIndex === 0
         ? Math.max(12, records.length ? Math.round(records.reduce((total, record) => total + record.applicationProgress, 0) / records.length) : 12)
-        : 18
+        : currentIndex === 1 ? 40 : 12
       : index < currentIndex ? 100 : 0,
   }));
 }
@@ -114,7 +114,7 @@ export function getApplicationJourneyNodes(applicationRecords: ApplicationRecord
       return {
         id: record.id,
         title: copy.title,
-        stage: record.status === "offer_received" ? "Offer" : "Application",
+        stage: record.status === "offer_received" && record.offerEvidenceAvailable ? "Visa" : record.status === "offer_received" ? "Offer" : "Application",
         explanation: copy.explanation,
         status: record.status === "manual_review" || record.status === "submitted" || record.status === "waiting_result" ? "in_progress" : record.status === "offer_received" ? "awaiting_evidence" : record.status === "supplement_required" ? "blocked" : "ready",
         deadline: record.nextDeadline ?? "待确认",
@@ -124,7 +124,7 @@ export function getApplicationJourneyNodes(applicationRecords: ApplicationRecord
         missingInformation: record.missingMaterials,
         primaryCta: copy.action,
         completionRequirement: record.nextAction,
-        actionHref: `/applications/${encodeURIComponent(record.id)}/materials`,
+        actionHref: record.status === "offer_received" && record.offerEvidenceAvailable ? "/dashboard/materials" : `/applications/${encodeURIComponent(record.id)}/materials`,
         applicationId: record.id,
         schoolName: record.universityName,
         programName: record.programName,
