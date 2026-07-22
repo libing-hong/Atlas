@@ -124,7 +124,7 @@ export function getApplicationJourneyNodes(applicationRecords: ApplicationRecord
         missingInformation: record.missingMaterials,
         primaryCta: copy.action,
         completionRequirement: record.nextAction,
-        actionHref: record.status === "offer_received" && record.offerEvidenceAvailable ? "/dashboard/materials" : `/applications/${encodeURIComponent(record.id)}/materials`,
+        actionHref: record.status === "offer_received" && record.offerEvidenceAvailable ? "/dashboard/visa" : `/applications/${encodeURIComponent(record.id)}/materials`,
         applicationId: record.id,
         schoolName: record.universityName,
         programName: record.programName,
