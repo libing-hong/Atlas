@@ -58,7 +58,6 @@ export type ApplicationRecord = {
   nextAction: string;
   nextDeadline?: string;
   serviceType: "none" | "single_school" | "full_service";
-  journeyStageIndex?: number;
 };
 
 export type SchoolRecommendation = {
@@ -172,7 +171,8 @@ export function getAdmissionRequirements(school: SchoolRecommendation): Admissio
   if (knowledge) {
     return knowledge.requirements.map((item) => ({ id: item.id, label: item.label, schoolRequirement: item.officialRequirement, userSituation: item.userSituation, status: item.status, officialProgramUrl: knowledge.sources.find((source) => source.id === item.sourceId)?.url, sourceId: item.sourceId, sourceTitle: knowledge.sources.find((source) => source.id === item.sourceId)?.title, lastVerifiedAt: knowledge.lastVerifiedAt }));
   }
-  return school.admissionRequirements ?? [
+  if (school.admissionRequirements?.length) return school.admissionRequirements;
+  const fallback = [
     { id: "degree", label: "学位要求", schoolRequirement: "认可的本科或同等学历", userSituation: "已提供本科教育背景", status: "meets" },
     { id: "academic", label: "成绩或 GPA 要求", schoolRequirement: "需要达到学校公布的成绩要求，具体以官方页面为准", userSituation: "成绩单已检测到，仍需核对学校换算方式", status: "needs_confirmation" },
     { id: "background", label: "本科专业背景", schoolRequirement: `${school.programName} 相关专业或可证明的相关学习经历`, userSituation: "现有专业与目标方向整体相关", status: "mostly_meets" },
@@ -180,7 +180,8 @@ export function getAdmissionRequirements(school: SchoolRecommendation): Admissio
     { id: "experience", label: "工作或实习经历", schoolRequirement: "学校未明确要求必须有相关工作经历", userSituation: "已有经历可用于个人陈述", status: "meets" },
     { id: "prerequisite", label: "先修课程", schoolRequirement: "部分课程可能要求定量分析或相关基础课程", userSituation: "尚未完成课程逐项核对", status: "unknown" },
     { id: "portfolio", label: "作品集或其他特殊要求", schoolRequirement: "目前未发现必须提交作品集的公开要求", userSituation: "需以最终申请页面再次确认", status: "needs_confirmation" },
-  ].map((item) => ({ ...item, status: item.status as RequirementStatus, schoolRequirement: "Atlas 尚未完成该项官方要求核实，请前往专业官网确认。" }));
+  ].map((item) => ({ ...item, status: item.status as RequirementStatus, schoolRequirement: `${item.schoolRequirement}（待官方核验）` }));
+  return fallback.filter((item) => !["experience", "prerequisite", "portfolio"].includes(item.id) || school.requirements.some((requirement) => item.id === "experience" ? /工作|实习|experience/i.test(requirement) : item.id === "prerequisite" ? /先修|课程|prerequisite/i.test(requirement) : /作品集|portfolio/i.test(requirement)));
 }
 
 export function getApplicationServiceRecommendation({

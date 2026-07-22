@@ -8,7 +8,7 @@ import { AdmissionRequirement, ApplicationMaterial, ApplicationRecord, getAdmiss
 import { getAdmissionKnowledge } from "@/lib/admission-knowledge";
 import { readActivePlanningRun } from "@/lib/planning-store";
 import { readStudentProfile, StudentProfile, writeStudentProfile, profileDisplay } from "@/lib/student-profile";
-import { InstitutionEligibilityPanel, InstitutionVerification } from "./InstitutionEligibilityPanel";
+import { confirmRecognizedMaterial, recognizeMaterial, type MaterialKind, type RecognizedMaterial } from "@/lib/material-recognition";
 import { MotivationLetterVip } from "./MotivationLetterVip";
 
 const requirementLabels: Record<RequirementStatus, string> = { meets: "已达标", mostly_meets: "基本符合", needs_confirmation: "需要确认", gap_detected: "尚未达标", unknown: "信息不足" };
@@ -35,16 +35,13 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
     try { return { ...defaults, ...JSON.parse(window.localStorage.getItem(`atlas.material-statuses.${applicationId}`) ?? "{}") as Record<string, string> }; } catch { return defaults; }
   });
   const [files, setFiles] = useState<Record<string, string>>({});
+  const [recognizedFiles, setRecognizedFiles] = useState<Record<string, RecognizedMaterial>>({});
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [activeRequirement, setActiveRequirement] = useState<AdmissionRequirement | null>(null);
   const [confirmedIds, setConfirmedIds] = useState<string[]>([]);
   const [profile, setProfile] = useState<StudentProfile>(() => readStudentProfile());
-  const primaryEducation = profile.educationHistory[0];
-  const [institution, setInstitution] = useState<InstitutionVerification>({ complete: false, institutionName: primaryEducation?.institutionNameZh ?? "", englishName: primaryEducation?.institutionNameEn ?? "", average: primaryEducation?.officialAverage ?? primaryEducation?.weightedAverage ?? primaryEducation?.arithmeticAverage ?? 0 });
   const [applicationMode, setApplicationMode] = useState<ApplicationMode>("unselected");
-  const [journeyStageIndex, setJourneyStageIndex] = useState(record.journeyStageIndex ?? (record.status === "offer_received" ? 1 : 0));
-  const institutionRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -58,8 +55,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
     return () => window.clearTimeout(timer);
   }, [applicationId]);
 
-  const gradeRequirement = requirements.find((item) => item.sourceId?.includes("cn-list") || item.label.includes("院校成绩"));
-  const effectiveConfirmedIds = institution.complete && gradeRequirement ? [...new Set([...confirmedIds, gradeRequirement.id])] : confirmedIds;
+  const effectiveConfirmedIds = confirmedIds;
   const pending = requirements.filter((item) => item.status === "needs_confirmation" && !effectiveConfirmedIds.includes(item.id));
 
   function persistConfirmations(ids: string[]) {
@@ -84,39 +80,28 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
   }
 
   function openRequirement(requirement: AdmissionRequirement) {
-    if (requirement.id === gradeRequirement?.id) {
-      institutionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      setNotice("请依次完成下方院校、规则范围与均分口径确认。完成后状态会自动更新。");
-      return;
-    }
     setActiveRequirement(requirement);
   }
 
   function openPicker(materialId: string) { setPreviewId(materialId); if (!uploadsEnabled) setNotice("Prototype Mode：本次仅记录文件名称与模拟状态，文件内容不会上传。请使用测试文件。"); fileInputRef.current?.click(); }
-  function handleFile(event: ChangeEvent<HTMLInputElement>) {
+  async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file || !previewId) return;
     const material = baseMaterials.find((item) => item.id === previewId);
     if (!material) return;
     setFiles((current) => ({ ...current, [previewId]: file.name }));
     if (!uploadsEnabled) window.localStorage.setItem(`atlas.prototype.material.${applicationId}.${previewId}`, JSON.stringify({ name: file.name, size: file.size, selectedAt: new Date().toISOString() }));
-    setStatuses((current) => ({ ...current, [previewId]: "uploading" }));
-    setNotice("");
-    window.setTimeout(() => {
-      const looksWrong = material.name.includes("推荐") && /(transcript|成绩单|passport|护照)/i.test(file.name);
-      if (looksWrong) { setStatuses((current) => ({ ...current, [previewId]: "rejected" })); setNotice("这份文件看起来不像推荐信，请检查后重新上传。"); }
-      else { setStatuses((current) => ({ ...current, [previewId]: "processing" })); window.setTimeout(() => setStatuses((current) => ({ ...current, [previewId]: "needs_confirmation" })), 650); }
-    }, 450);
+    setStatuses((current) => ({ ...current, [previewId]: "processing" }));
+    const result = await recognizeMaterial(file, materialHint(material.name));
+    setRecognizedFiles((current) => ({ ...current, [previewId]: result }));
+    const looksWrong = material.name.includes("推荐") && result.kind !== "recommendation";
+    if (looksWrong) { setStatuses((current) => ({ ...current, [previewId]: "rejected" })); setNotice("识别结果与推荐信材料类型不一致，请检查后重新上传。"); }
+    else { setStatuses((current) => ({ ...current, [previewId]: "needs_confirmation" })); setNotice(`Atlas 已识别：${result.summary.join("；")}。请确认后写入系统。`); }
     event.target.value = "";
   }
-  function confirmFile(material: ApplicationMaterial) { setStatuses((current) => { const next = { ...current, [material.id]: "confirmed" }; syncMaterialStatus(next); return next; }); setNotice("Atlas 已记录你的确认，材料状态、申请进度和当前事项已同步更新。"); }
+  function confirmFile(material: ApplicationMaterial) { const recognized = recognizedFiles[material.id]; if (recognized) { confirmRecognizedMaterial(recognized); setProfile(readStudentProfile()); } setStatuses((current) => { const next = { ...current, [material.id]: "confirmed" }; syncMaterialStatus(next); return next; }); setNotice("Atlas 已写入识别结果，并同步更新材料状态、学生资料、申请进度和当前事项。"); }
 
   function currentRequirement(requirement: AdmissionRequirement) {
-    if (requirement.id === gradeRequirement?.id && institution.complete) return {
-      ...requirement,
-      status: institution.result === "accepted" ? "meets" as const : institution.result === "not_found" ? "gap_detected" as const : "needs_confirmation" as const,
-      userSituation: `${institution.englishName} · ${institution.average}%（成绩单官方均分）`,
-    };
     if (effectiveConfirmedIds.includes(requirement.id)) {
       if (requirement.label.includes("英语")) return { ...requirement, status: "gap_detected" as const, userSituation: "IELTS Academic 6.5；写作 5.5，低于单项要求 0.5 分" };
       return { ...requirement, status: "meets" as const };
@@ -125,13 +110,13 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
   }
 
   return <div className="space-y-6">
-    <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" className="hidden" onChange={handleFile} />
+    <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.txt,.csv" className="hidden" onChange={(event) => { void handleFile(event); }} />
 
     <ConfirmationActions pending={pending} onOpen={openRequirement} />
     {notice ? <div role="status" className="rounded-2xl border border-[#d8ccbe] bg-[#f7f0e8] p-4 text-sm text-[#5d5148]">{notice}</div> : null}
 
     <Card className="border-2 border-[#2f2924] p-5 md:p-7">
-      <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end"><div className="min-w-0"><p className="text-xs uppercase tracking-[0.22em] text-[#9a8b7c]">学校录取要求</p><h2 className="mt-2 font-editorial text-4xl font-semibold text-[#2f2924]">{school.universityName} · {school.programName}</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-[#6f6256]">Atlas 仅对照学校公开要求与现有资料，不代替学校作出录取决定。</p></div><span className="w-fit shrink-0 whitespace-nowrap rounded-full border border-[#d2dce5] bg-[#e8edf1] px-3 py-1 text-xs text-[#52687a]">公开要求对照</span></div>
+      <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end"><div className="min-w-0"><p className="text-xs uppercase tracking-[0.22em] text-[#9a8b7c]">学校录取要求</p><h2 className="mt-2 font-editorial text-4xl font-semibold text-[#2f2924]">{school.universityName} · {school.programName}</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-[#6f6256]">Atlas 仅对照学校公开要求与现有资料，不代替学校作出录取决定。</p></div><div className="flex shrink-0 flex-col items-start gap-2 md:items-end"><span className="w-fit whitespace-nowrap rounded-full border border-[#d2dce5] bg-[#e8edf1] px-3 py-1 text-xs text-[#52687a]">公开要求对照</span>{isUsableProgrammeUrl(school.officialProgramUrl) ? <a href={school.officialProgramUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-[#4f6d54] underline underline-offset-4">查看专业招生页面（待核验）<ArrowUpRight size={13} /></a> : <span className="text-xs text-[#8f847a]">招生页面正在核验</span>}</div></div>
       <OfficialSourceSummary knowledge={knowledge} school={school} applicationId={applicationId} applicationMode={applicationMode} />
       <div className="mt-6 overflow-hidden rounded-2xl border border-[#e8dfd3]">
         <div className="hidden grid-cols-[1fr_1.2fr_1.2fr_0.8fr] gap-4 bg-[#f7f0e8] px-4 py-3 text-xs uppercase tracking-[0.14em] text-[#9a8b7c] md:grid"><span>要求项目</span><span>学校要求</span><span>你的情况</span><span>当前状态</span></div>
@@ -149,20 +134,14 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
     </Card>
     <MotivationLetterVip school={school} applicationId={applicationId} />
 
-    <div ref={institutionRef} className="scroll-mt-6"><InstitutionEligibilityPanel targetUniversityId={school.id} targetUniversityName={school.universityName} institutionName={primaryEducation?.institutionNameEn ?? primaryEducation?.institutionNameZh ?? ""} programName={school.programName} intake={school.intake} onStatusChange={(value) => { setInstitution(value); if (value.complete && gradeRequirement) { persistConfirmations([...new Set([...confirmedIds, gradeRequirement.id])]); setNotice("院校核验已更新，录取要求状态和待确认事项已自动重新计算。"); } }} /></div>
-
     <Card><div className="flex items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.22em] text-[#9a8b7c]">材料状态</p><h2 className="mt-2 font-editorial text-3xl font-semibold text-[#2f2924]">申请材料</h2><p className="mt-2 text-sm leading-6 text-[#6f6256]">Atlas 会将已上传的通用材料自动关联到符合要求的学校。</p></div><span className="text-sm text-[#8f847a]">已确认 {Object.values(statuses).filter((status) => status === "prepared" || status === "confirmed").length} 项</span></div><div className="mt-5 grid gap-3 md:grid-cols-2">{baseMaterials.map((material) => <MaterialRow key={material.id} material={material} status={statuses[material.id] ?? material.status} fileName={files[material.id]} onUpload={() => openPicker(material.id)} onConfirm={() => confirmFile(material)} onPreview={() => setNotice(`${material.name} 当前文件：${files[material.id] ?? "Atlas 已检测到的材料"}`)} />)}</div></Card>
-
-    <PrototypeJourneyControls stageIndex={journeyStageIndex} onAdvance={() => { const next = Math.min(7, journeyStageIndex + 1); setJourneyStageIndex(next); updateApplicationRecord(applicationId, { journeyStageIndex: next, status: next >= 1 ? "offer_received" : record.status, applicationProgress: next === 0 ? record.applicationProgress : 100, nextAction: next === 7 ? "完成毕业阶段模拟" : "继续下一阶段模拟" }); setNotice(`Prototype Mode：已推进到第 ${next + 1} 阶段。`); }} onReset={() => { setJourneyStageIndex(0); updateApplicationRecord(applicationId, { journeyStageIndex: 0, status: "ready_to_apply", applicationProgress: 78, nextAction: "核对申请信息并提交申请" }); setNotice("Prototype Mode：已重置为申请阶段。"); }} />
 
     {activeRequirement ? <RequirementConfirmModal requirement={activeRequirement} materialStatuses={statuses} profile={profile} onProfileChange={(next) => { writeStudentProfile(next); setProfile(next); }} onClose={() => setActiveRequirement(null)} onMessage={setNotice} onConfirm={async () => { await new Promise((resolve) => window.setTimeout(resolve, 650)); persistConfirmations([...new Set([...confirmedIds, activeRequirement.id])]); setActiveRequirement(null); setNotice(`${activeRequirement.label}已确认，Atlas 已重新计算录取要求状态。`); }} /> : null}
   </div>;
 }
 
-const prototypeStages = ["申请", "录取", "签证", "行前准备", "抵达", "安顿", "学生生活", "毕业"];
-function PrototypeJourneyControls({ stageIndex, onAdvance, onReset }: { stageIndex: number; onAdvance: () => void; onReset: () => void }) {
-  return <Card className="border border-[#d8ccbe] p-5 md:p-7"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="text-xs uppercase tracking-[0.2em] text-[#9a8b7c]">Prototype Journey</p><h2 className="mt-2 font-editorial text-3xl font-semibold text-[#2f2924]">阶段模拟推进</h2><p className="mt-2 text-sm leading-6 text-[#6f6256]">仅更新当前浏览器中的模拟状态，不代表真实申请、录取或签证结果。</p></div><span className="w-fit rounded-full bg-[#eef4ed] px-3 py-1 text-xs text-[#4f6d54]">第 {stageIndex + 1} 阶段 · {prototypeStages[stageIndex]}</span></div><div className="mt-5 flex flex-wrap gap-2">{prototypeStages.map((stage, index) => <span key={stage} className={`rounded-full border px-3 py-2 text-xs ${index < stageIndex ? "border-[#c9dbc5] bg-[#e7ece7] text-[#4f6d54]" : index === stageIndex ? "border-[#2f2924] bg-[#2f2924] text-white" : "border-[#d8ccbe] text-[#8f847a]"}`}>{stage}</span>)}</div><div className="mt-5 flex flex-wrap gap-3"><button type="button" onClick={onAdvance} disabled={stageIndex >= prototypeStages.length - 1} className={greenButton}>{stageIndex >= prototypeStages.length - 1 ? "模拟已完成" : `完成并进入${prototypeStages[stageIndex + 1]}`}</button><button type="button" onClick={onReset} className={secondaryButton}>重置模拟</button></div></Card>;
-}
+function isUsableProgrammeUrl(url?: string) { try { if (!url) return false; const parsed = new URL(url); return parsed.protocol === "https:" && parsed.hostname !== "atlas.invalid" && !parsed.hostname.endsWith(".atlas.invalid"); } catch { return false; } }
+function materialHint(name: string): MaterialKind | undefined { if (/成绩单/.test(name)) return "transcript"; if (/学位|毕业/.test(name)) return "degree"; if (/英语|语言|IELTS|TOEFL/i.test(name)) return "language"; if (/CV|简历/i.test(name)) return "cv"; if (/动机|个人陈述/.test(name)) return "personal_statement"; if (/推荐/.test(name)) return "recommendation"; if (/护照|身份/.test(name)) return "identity"; return undefined; }
 
 function ConfirmationActions({ pending, onOpen }: { pending: AdmissionRequirement[]; onOpen: (requirement: AdmissionRequirement) => void }) {
   if (!pending.length) return <Card className="border border-[#c9dbc5] bg-[#f0f5ef] p-5"><div className="flex gap-3"><CheckCircle2 className="mt-0.5 shrink-0 text-[#5f805f]" size={20} /><div><p className="font-medium text-[#36573c]">主要信息已确认</p><p className="mt-1 text-sm leading-6 text-[#58705b]">Atlas 已根据目前资料完成学校要求对照。</p></div></div></Card>;
