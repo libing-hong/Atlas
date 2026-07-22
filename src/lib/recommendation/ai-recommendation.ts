@@ -3,7 +3,7 @@ import type { StudentProfile } from "../student-profile";
 import type { ProgrammeCandidate, UnderstoodProfile, VerifiedField, VerifiedProgramme } from "./types";
 
 export const RECOMMENDATION_PROMPT_VERSION = "atlas-school-plan-v2";
-export const RECOMMENDATION_MODEL = process.env.OPENAI_RECOMMENDATION_MODEL ?? "gpt-5-mini";
+export const RECOMMENDATION_MODEL = process.env.OPENAI_RECOMMENDATION_MODEL ?? "gpt-4.1-mini";
 
 export type ApplicantProfile = {
   currentDegree?: string; currentInstitution?: string; institutionCountry?: string; currentMajor?: string;
@@ -34,7 +34,7 @@ export class SchoolRecommendationError extends Error {
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new SchoolRecommendationError("OPENAI_API_KEY_MISSING");
-  return new OpenAI({ apiKey, timeout: 70_000, maxRetries: 0 });
+  return new OpenAI({ apiKey, timeout: 45_000, maxRetries: 0 });
 }
 
 export function normalizeOpenAIError(error: unknown): SchoolRecommendationError {
