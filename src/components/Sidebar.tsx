@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSyncExternalStore } from "react";
 import {
   Bot,
   FileText,
@@ -12,6 +13,7 @@ import {
   LayoutDashboard,
   Lock,
   MessageSquare,
+  PlaneTakeoff,
   Search,
   Settings,
   Shield,
@@ -21,11 +23,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LanguageToggle, useLanguage } from "./language/LanguageProvider";
+import { getApplicationStateSnapshot, getServerApplicationStateSnapshot, subscribeToApplicationState } from "@/lib/application-store";
+import type { ApplicationRecord } from "@/lib/application-prototype-data";
 
 const studentLinks = [
   { href: "/dashboard", label: { en: "My Atlas", zh: "我的 Atlas" }, icon: LayoutDashboard, active: true },
   { href: "/dashboard/journey", label: { en: "Current Tasks", zh: "当前事项" }, icon: Sparkles, active: true },
   { href: "/dashboard/applications", label: { en: "My Applications", zh: "我的申请" }, icon: GraduationCap, active: true },
+  { href: "/dashboard/visa", label: { en: "My Visa", zh: "我的签证" }, icon: PlaneTakeoff, active: true, requiresOffer: true },
   { href: "/dashboard/materials", label: { en: "Materials", zh: "材料中心" }, icon: FolderOpen, active: true },
   { href: "/dashboard/form-assistant", label: { en: "Form Assistant", zh: "表格助手" }, icon: FileText, active: false },
   { href: "/dashboard/action-center", label: { en: "Action Center", zh: "行动中心" }, icon: Search, active: false },
@@ -45,6 +50,8 @@ const adminLinks = [
 export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
   const pathname = usePathname();
   const { t } = useLanguage();
+  const snapshot = useSyncExternalStore(subscribeToApplicationState, getApplicationStateSnapshot, getServerApplicationStateSnapshot);
+  const visaUnlocked = snapshot !== "server" && (JSON.parse(snapshot) as { records: ApplicationRecord[] }).records.some((record) => record.status === "offer_received" && record.offerEvidenceAvailable);
   const links = mode === "admin" ? adminLinks : studentLinks;
 
   return (
@@ -59,9 +66,16 @@ export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
         <nav className="mt-6 space-y-1.5">
           {links.map((item) => {
             const Icon = item.icon;
+            const unavailable = ("active" in item && !item.active) || ("requiresOffer" in item && item.requiresOffer && !visaUnlocked);
             const isActive = item.href === "/dashboard/applications"
               ? pathname.startsWith("/dashboard/applications") || pathname.startsWith("/applications")
               : pathname === item.href;
+            if (unavailable) return (
+              <div key={item.href} aria-disabled="true" className="flex cursor-not-allowed items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm text-[#8f847a]">
+                <span className="flex min-w-0 items-center gap-3"><Icon size={18} className="shrink-0" /><span className="truncate">{t(item.label)}</span></span>
+                <span className="inline-flex items-center gap-1 text-[10px]"><Lock size={12} />即将开放</span>
+              </div>
+            );
             return (
               <Link
                 key={item.href}
@@ -75,7 +89,6 @@ export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
                   <Icon size={18} className="shrink-0" />
                   <span className="truncate">{t(item.label)}</span>
                 </span>
-                {"active" in item && !item.active ? <Lock size={13} className="shrink-0 opacity-55" /> : null}
               </Link>
             );
           })}
@@ -94,7 +107,7 @@ export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
 
       {mode === "student" ? (
         <nav className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-4 border-t border-[#e8dfd3] bg-[#fffaf3]/95 px-2 py-2 shadow-[0_-10px_30px_rgba(88,72,55,0.08)] backdrop-blur lg:hidden">
-          {studentLinks.slice(0, 4).map((item) => {
+          {studentLinks.filter((item) => item.href !== "/dashboard/visa").slice(0, 4).map((item) => {
             const Icon = item.icon;
             const isActive = item.href === "/dashboard/applications"
               ? pathname.startsWith("/dashboard/applications") || pathname.startsWith("/applications")
@@ -124,13 +137,9 @@ export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
 
       {mode === "student" ? (
         <div className="fixed bottom-[74px] right-4 z-40 lg:hidden">
-          <Link
-            href="/dashboard/assistant"
-            className="grid h-12 w-12 place-items-center rounded-full bg-[#2f2924] text-[#fffaf3] shadow-lg"
-            aria-label="Open Atlas Assistant"
-          >
+          <button type="button" disabled className="grid h-12 w-12 cursor-not-allowed place-items-center rounded-full bg-[#8f847a] text-[#fffaf3] shadow-lg" aria-label="Atlas 助手即将开放" title="即将开放">
             <MessageSquare size={20} />
-          </Link>
+          </button>
         </div>
       ) : null}
     </>

@@ -2,8 +2,10 @@ import { Card, CardHeader } from "@/components/Card";
 import { DashboardShell } from "@/components/PageShell";
 import { StudentTable } from "@/components/StudentTable";
 import { students } from "@/lib/mock-data";
+import { requirePageRole } from "@/lib/server/auth";
 
-export default function AdminStudentsPage() {
+export default async function AdminStudentsPage() {
+  await requirePageRole(["advisor", "admin"]);
   return (
     <DashboardShell mode="admin">
       <section className="mb-6">

@@ -144,12 +144,12 @@ export async function ingestProgramContent(jobId: string, input: ProgramDiscover
     await updateIngestionJob(jobId, "validating");
     const summary = await dependencies.summarizer.summarize({ programName: input.programName, fields: unique });
     const coreModules = unique.filter((field) => field.field === "core_module").flatMap((field) => {
-      const module = moduleFromField(field);
-      return module ? [module] : [];
+      const courseModule = moduleFromField(field);
+      return courseModule ? [courseModule] : [];
     });
     const optionalModules = unique.filter((field) => field.field === "optional_module").flatMap((field) => {
-      const module = moduleFromField(field);
-      return module ? [module] : [];
+      const courseModule = moduleFromField(field);
+      return courseModule ? [courseModule] : [];
     });
     const verifiedFields = unique.filter((field) => field.verificationStatus === "verified");
     const coverageStatus = verifiedFields.length >= 8 && coreModules.length >= 3 ? "verified" as const : "partially_verified" as const;

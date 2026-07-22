@@ -1,5 +1,6 @@
 import { formatCNY } from "./format-currency";
 import { getAdmissionKnowledge } from "./admission-knowledge";
+import { SERVICE_CATALOG } from "./service-catalog";
 
 export type ApplicationHomeState =
   | "report_missing"
@@ -57,6 +58,10 @@ export type ApplicationRecord = {
   nextAction: string;
   nextDeadline?: string;
   serviceType: "none" | "single_school" | "full_service";
+  decisionStatus?: "waiting_result" | "offer_received" | "waitlisted" | "rejected";
+  offerSource?: "student" | "atlas";
+  offerEvidenceAvailable?: boolean;
+  offerFileName?: string;
 };
 
 export type SchoolRecommendation = {
@@ -170,7 +175,8 @@ export function getAdmissionRequirements(school: SchoolRecommendation): Admissio
   if (knowledge) {
     return knowledge.requirements.map((item) => ({ id: item.id, label: item.label, schoolRequirement: item.officialRequirement, userSituation: item.userSituation, status: item.status, officialProgramUrl: knowledge.sources.find((source) => source.id === item.sourceId)?.url, sourceId: item.sourceId, sourceTitle: knowledge.sources.find((source) => source.id === item.sourceId)?.title, lastVerifiedAt: knowledge.lastVerifiedAt }));
   }
-  return school.admissionRequirements ?? [
+  if (school.admissionRequirements?.length) return school.admissionRequirements;
+  const fallback = [
     { id: "degree", label: "学位要求", schoolRequirement: "认可的本科或同等学历", userSituation: "已提供本科教育背景", status: "meets" },
     { id: "academic", label: "成绩或 GPA 要求", schoolRequirement: "需要达到学校公布的成绩要求，具体以官方页面为准", userSituation: "成绩单已检测到，仍需核对学校换算方式", status: "needs_confirmation" },
     { id: "background", label: "本科专业背景", schoolRequirement: `${school.programName} 相关专业或可证明的相关学习经历`, userSituation: "现有专业与目标方向整体相关", status: "mostly_meets" },
@@ -178,7 +184,8 @@ export function getAdmissionRequirements(school: SchoolRecommendation): Admissio
     { id: "experience", label: "工作或实习经历", schoolRequirement: "学校未明确要求必须有相关工作经历", userSituation: "已有经历可用于个人陈述", status: "meets" },
     { id: "prerequisite", label: "先修课程", schoolRequirement: "部分课程可能要求定量分析或相关基础课程", userSituation: "尚未完成课程逐项核对", status: "unknown" },
     { id: "portfolio", label: "作品集或其他特殊要求", schoolRequirement: "目前未发现必须提交作品集的公开要求", userSituation: "需以最终申请页面再次确认", status: "needs_confirmation" },
-  ].map((item) => ({ ...item, status: item.status as RequirementStatus, schoolRequirement: "Atlas 尚未完成该项官方要求核实，请前往专业官网确认。" }));
+  ].map((item) => ({ ...item, status: item.status as RequirementStatus, schoolRequirement: `${item.schoolRequirement}（待官方核验）` }));
+  return fallback.filter((item) => !["experience", "prerequisite", "portfolio"].includes(item.id) || school.requirements.some((requirement) => item.id === "experience" ? /工作|实习|experience/i.test(requirement) : item.id === "prerequisite" ? /先修|课程|prerequisite/i.test(requirement) : /作品集|portfolio/i.test(requirement)));
 }
 
 export function getApplicationServiceRecommendation({
@@ -205,10 +212,10 @@ export function getApplicationServiceRecommendation({
       type: "france_consultation" as const,
       title: "法国申请需要先确认整体方案",
       description: "法国申请可能同时涉及学校申请、Études en France、面试和签证准备。建议先确认整体方案。",
-      cta: `预约一对一留学规划 ${formatCNY(299)}／次`,
+      cta: `预约一对一留学规划 ${formatCNY(SERVICE_CATALOG.consultation.amount)}／次`,
       href: "/dashboard/order-application?service=consultation",
       details: ["学校申请路径", "Études en France / Campus France", "材料与面试安排", "后续签证准备"],
-      notice: consultationPurchased ? "一对一留学规划咨询已预约" : `一对一留学规划咨询 ${formatCNY(299)}／次。`,
+      notice: consultationPurchased ? "一对一留学规划咨询已预约" : `一对一留学规划咨询 ${formatCNY(SERVICE_CATALOG.consultation.amount)}／次。`,
     };
   }
   if (confirmedApplications.length >= 2) {
@@ -226,7 +233,7 @@ export function getApplicationServiceRecommendation({
       type: "single_school_service" as const,
       title: "不想自己填写申请系统？",
       description: "Atlas 可以帮助你审核材料、填写学校申请系统、正式递交并跟踪学校回复。",
-      cta: `购买单校申请递交 ${formatCNY(29.9)}／学校`,
+      cta: `购买单校申请递交 ${formatCNY(SERVICE_CATALOG.submission.amount)}／学校`,
       href: "/dashboard/order-application?service=single-school",
       details: ["人工审核申请材料", "填写学校申请系统", "正式递交并同步申请编号", "跟踪学校回复"],
     };
@@ -235,10 +242,10 @@ export function getApplicationServiceRecommendation({
     type: "selection_consultation" as const,
     title: "不确定如何选择学校？",
     description: "顾问可以根据你的背景、预算和申请目标，帮助你确认学校组合与申请优先级。",
-    cta: `预约一对一留学规划 ${formatCNY(299)}／次`,
+    cta: `预约一对一留学规划 ${formatCNY(SERVICE_CATALOG.consultation.amount)}／次`,
     href: "/dashboard/order-application?service=consultation",
     details: ["学校组合建议", "申请优先级", "主要风险说明"],
-    notice: `一对一留学规划咨询 ${formatCNY(299)}／次。`,
+    notice: `一对一留学规划咨询 ${formatCNY(SERVICE_CATALOG.consultation.amount)}／次。`,
   };
 }
 
@@ -264,7 +271,7 @@ export const applicationStateCopy: Record<ApplicationHomeState, {
     description: "Atlas 将仅展示当前已核验且与你资料匹配的项目。",
     prepared: ["学校匹配结果", "录取要求对比", "学费与截止日期", "主要申请风险"],
     cta: "查看推荐学校",
-    secondary: `预约一对一留学规划 ${formatCNY(299)}／次`,
+    secondary: `预约一对一留学规划 ${formatCNY(SERVICE_CATALOG.consultation.amount)}／次`,
   },
   school_confirmed: {
     title: "准备第一所学校的申请材料",
@@ -311,7 +318,6 @@ export const applicationStateCopy: Record<ApplicationHomeState, {
     cta: "查看并处理 Offer",
   },
 };
-
 
 
 

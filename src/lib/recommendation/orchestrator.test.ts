@@ -7,7 +7,8 @@ import { retrieveCachedVerifiedProgrammes } from "./programme-repository";
 import { understandProfile } from "./profile-understanding";
 import { normalizeStudentProfile } from "../student-profile";
 import { aiRecommendationToCandidate, buildApplicantProfile, normalizeOpenAIError, SchoolRecommendationError, type AIProgramRecommendation } from "./ai-recommendation";
-import { normalizeRecommendationCountry } from "./orchestrator";
+import { normalizeRecommendationCountry, orchestrateRecommendations } from "./orchestrator";
+import { getCandidatePresentation } from "./presentation";
 import type { ProgrammeCandidate, UnderstoodProfile, VerifiedProgramme } from "./types";
 
 const verifiedProgramme: VerifiedProgramme = {
@@ -92,3 +93,39 @@ test("OpenAI errors remain distinguishable without exposing credentials", () => 
   assert.equal(normalizeOpenAIError(new SchoolRecommendationError("OPENAI_INVALID_RESPONSE")).code, "OPENAI_INVALID_RESPONSE");
 });
 
+test("pending candidates never expose verified copy or an application URL", () => {
+  const pendingCandidate = {
+    ...candidate,
+    verificationStatus: "pending" as const,
+    generatedByAI: true,
+    verifiedProgramme: {
+      ...verifiedProgramme,
+      applicationUrl: { value: "https://apply.example.edu", sourceUrl: "https://apply.example.edu", retrievedAt: "2026-07-19", verificationStatus: "partially_verified" as const },
+    },
+  };
+  const presentation = getCandidatePresentation(pendingCandidate);
+  assert.equal(presentation.applicationUrl, undefined);
+  assert.equal(presentation.canJoinApplicationList, false);
+  assert.match(presentation.schoolHighlights, /探索性候选/);
+  assert.doesNotMatch(presentation.schoolHighlights, /已完成官方核验/);
+});
+
+test("OpenAI failure still returns cached verified programmes", async () => {
+  const raw = normalizeStudentProfile({ targetCountries: ["法国"], targetSubjects: ["艺术管理"], targetDegreeLevel: "硕士" });
+  const result = await orchestrateRecommendations({
+    profile: raw,
+    plannedApplicationCount: 1,
+    aiProvider: { generate: async () => { throw new Error("timeout"); } },
+    discoveryProvider: { discover: async () => [] },
+  });
+  assert.ok(result.candidates.some((item) => item.verificationStatus !== "pending"));
+  assert.ok(result.events.some((item) => item.label === "AI 探索候选暂不可用"));
+});
+
+test("supervisor removes duplicate AI candidates", async () => {
+  const raw = normalizeStudentProfile({ targetCountries: ["英国"], targetSubjects: ["艺术管理"], targetDegreeLevel: "硕士" });
+  const duplicate: AIProgramRecommendation = { schoolName:"Example University",schoolNameLocal:null,programName:"MA Arts Management",programNameLocal:null,country:"UK",city:"London",degreeLevel:"master",subjectArea:"Arts Management",category:"target",estimatedFitScore:78,recommendationReasons:["专业方向匹配"],applicantStrengths:[],admissionConcerns:[],admissionRequirements:[],missingRequirements:[],verificationQueries:[],expectedOfficialDomain:"example.ac.uk",possibleOfficialUrl:null,confidence:.7 };
+  const result = await orchestrateRecommendations({ profile: raw, aiProvider: { generate: async () => [duplicate, duplicate] }, discoveryProvider: { discover: async () => [] } });
+  assert.equal(result.candidates.filter((item) => item.institutionName === "Example University").length, 1);
+  assert.ok(result.reviewQueue.some((item) => item.reasons.includes("DUPLICATE_RESULT")));
+});

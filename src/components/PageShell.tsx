@@ -9,11 +9,12 @@ export function DashboardShell({
   children: React.ReactNode;
   mode?: "student" | "admin";
 }) {
+  const prototypeMode = !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   return (
     <>
       <main className="atlas-shell flex gap-6 pb-28 pt-4 lg:py-6">
         <Sidebar mode={mode} />
-        <div className="min-w-0 flex-1">{children}</div>
+        <div className="min-w-0 flex-1">{prototypeMode ? <p className="mb-3 rounded-xl border border-[#e8d8bd] bg-[#fbf2df] px-4 py-2 text-xs text-[#7b6541]">Prototype Mode · 数据仅保存在当前浏览器，不代表正式账户数据</p> : null}{children}</div>
       </main>
       {mode === "student" ? <LegalFooter /> : null}
     </>
@@ -50,7 +51,6 @@ export function TopNav() {
       <nav className="hidden items-center gap-6 text-sm text-[#6f6256] md:flex">
         <Link href="/planner">免费规划</Link>
         <Link href="/dashboard">学生空间</Link>
-        <Link href="/admin">顾问后台</Link>
       </nav>
     </header>
   );

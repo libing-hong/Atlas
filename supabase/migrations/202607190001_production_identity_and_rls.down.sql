@@ -1,0 +1,15 @@
+drop policy if exists private_material_owner_write on storage.objects;
+drop policy if exists private_material_read on storage.objects;
+delete from storage.buckets where id='atlas-private-materials';
+drop policy if exists users_read_scope on public.users;
+drop policy if exists profiles_read_scope on public.student_profiles;
+drop policy if exists profiles_owner_write on public.student_profiles;
+drop policy if exists material_scope on public.materials;
+alter table public.users disable row level security;
+alter table public.student_profiles disable row level security;
+alter table public.materials disable row level security;
+drop table if exists public.audit_events, public.privacy_requests, public.consents, public.service_orders, public.application_records, public.programme_verifications, public.recommendation_candidates, public.recommendation_runs, public.planning_runs, public.advisor_assignments cascade;
+drop function if exists public.can_access_student(uuid);
+drop function if exists public.current_atlas_role();
+drop function if exists public.current_atlas_user_id();
+drop index if exists public.users_auth_user_id_idx;

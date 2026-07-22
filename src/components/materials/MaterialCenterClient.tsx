@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FilePlus2, ShieldCheck, Upload } from "lucide-react";
 import { Card, CardHeader } from "@/components/Card";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -8,7 +8,10 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { T, useLanguage } from "@/components/language/LanguageProvider";
 import { MaterialCategory, MaterialDocument } from "@/lib/visual-prototype-data";
 import { cn } from "@/lib/utils";
+import { confirmRecognizedMaterial, recognizeMaterial, type MaterialKind, type RecognizedMaterial } from "@/lib/material-recognition";
 import { SensitiveUploadPanel } from "./SensitiveUploadPanel";
+import { listStoredMaterials, saveMaterialFile, subscribeMaterialLibrary, type StoredMaterial } from "@/lib/material-repository";
+import { MaterialPreviewDialog } from "./MaterialPreviewDialog";
 
 export function MaterialCenterClient({
   categories,
@@ -20,12 +23,17 @@ export function MaterialCenterClient({
   readiness: { ready: number; total: number; missing: number; expiring: number };
 }) {
   const [category, setCategory] = useState("All");
+  const [uploadMessage, setUploadMessage] = useState("");
+  const [recognized, setRecognized] = useState<RecognizedMaterial | null>(null);
+  const [storedMaterials, setStoredMaterials] = useState<StoredMaterial[]>([]);
+  const [previewMaterial, setPreviewMaterial] = useState<StoredMaterial | null>(null);
   const { t, text } = useLanguage();
   const filteredDocuments = useMemo(
     () => (category === "All" ? documents : documents.filter((document) => document.category === category)),
     [category, documents],
   );
   const readinessValue = Math.round((readiness.ready / readiness.total) * 100);
+  useEffect(() => { const refresh = () => setStoredMaterials(listStoredMaterials()); refresh(); return subscribeMaterialLibrary(refresh); }, []);
 
   return (
     <div className="space-y-6">
@@ -49,35 +57,41 @@ export function MaterialCenterClient({
               [
                 t({ en: "Upload CV", zh: "上传 CV" }),
                 t({ en: "Keep a current version for school and visa tasks.", zh: "为学校申请和签证任务保留最新版简历。" }),
+                "cv",
               ],
               [
                 t({ en: "Upload Personal Statement", zh: "上传个人陈述" }),
                 t({ en: "Atlas can link it to application readiness.", zh: "Atlas 可以把它关联到申请准备度。" }),
+                "personal_statement",
               ],
               [
                 t({ en: "Add Recommendation Letter", zh: "添加推荐信" }),
                 t({ en: "Track recommenders and letter status.", zh: "追踪推荐人和推荐信状态。" }),
+                "recommendation",
               ],
-            ].map(([title, description]) => (
-              <button
+            ].map(([title, description, hint]) => (
+              <label
                 key={title}
-                type="button"
-                className="rounded-[20px] border border-[#d8ccbe] bg-[#f7f0e8] p-4 text-left transition hover:bg-[#f3ece3]"
+                className="cursor-pointer rounded-[20px] border border-[#d8ccbe] bg-[#f7f0e8] p-4 text-left transition hover:bg-[#fffaf3]"
               >
                 <Upload size={18} className="text-[#8ea08b]" />
                 <span className="mt-3 block text-sm font-semibold text-[#2f2924]">{title}</span>
                 <span className="mt-2 block text-sm leading-6 text-[#6f6256]">{description}</span>
-                <span className="mt-3 block text-xs uppercase tracking-[0.18em] text-[#9a8b7c]">
-                  <T en="Prepare upload" zh="准备上传" />
+                <span className="mt-3 block text-xs uppercase tracking-[0.18em] text-[#6f856a]">
+                  <T en="Choose test file" zh="选择测试文件" />
                 </span>
-              </button>
+                <input type="file" className="sr-only" accept=".pdf,.doc,.docx,.txt,.csv,.png,.jpg,.jpeg" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void recognizeMaterial(file, hint as MaterialKind).then(async (result) => { await saveMaterialFile(file, result.kind); setRecognized(result); setUploadMessage(`${title} 已完成材料分类并保存到当前浏览器的材料库，请确认识别结果。`); }); event.target.value = ""; }} />
+              </label>
             ))}
           </div>
+          {uploadMessage ? <p role="status" className="mt-4 rounded-xl bg-[#eef4ed] p-3 text-sm text-[#4f6d54]">{uploadMessage}</p> : null}
+          {recognized ? <div className="mt-4 rounded-2xl border border-[#d8ccbe] bg-[#fffaf3] p-4"><p className="font-semibold text-[#2f2924]">识别结果</p><ul className="mt-2 space-y-1 text-sm text-[#5d5148]">{recognized.summary.map((item) => <li key={item}>· {item}</li>)}</ul><button type="button" onClick={() => { confirmRecognizedMaterial(recognized); setUploadMessage("识别结果已写入学生 Profile 和材料记录，相关申请会读取最新信息。"); setRecognized(null); }} className="mt-3 rounded-full bg-[#5f805f] px-4 py-2 text-sm text-white">确认并写入系统</button></div> : null}
         </Card>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[0.72fr_1.28fr]">
         <div className="space-y-6">
+          {storedMaterials.length ? <Card><CardHeader title={<T en="Uploaded Material Library" zh="已上传材料库" />} /><p className="mb-4 text-sm text-[#6f6256]">这些文件可在不同学校的申请中直接选择复用。</p><div className="grid gap-3 lg:grid-cols-2">{storedMaterials.map((material) => <article key={material.id} className="rounded-2xl border border-[#c9dbc5] bg-[#e7ece7] p-4"><p className="truncate font-medium text-[#2f2924]">{material.name}</p><p className="mt-1 text-xs text-[#6f6256]">{material.kind} · {(material.size / 1024).toFixed(1)} KB</p><button type="button" onClick={() => setPreviewMaterial(material)} className="mt-3 text-xs text-[#4f6d54] underline underline-offset-4">预览材料</button></article>)}</div></Card> : null}
           <Card>
             <CardHeader title={<T en="Categories" zh="文件分类" />} />
             <div className="space-y-2">
@@ -138,6 +152,7 @@ export function MaterialCenterClient({
           </Card>
         </div>
       </section>
+      {previewMaterial ? <MaterialPreviewDialog material={previewMaterial} onClose={() => setPreviewMaterial(null)} /> : null}
     </div>
   );
 }

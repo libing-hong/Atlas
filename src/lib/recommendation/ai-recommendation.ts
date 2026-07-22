@@ -3,7 +3,7 @@ import type { StudentProfile } from "../student-profile";
 import type { ProgrammeCandidate, UnderstoodProfile, VerifiedField, VerifiedProgramme } from "./types";
 
 export const RECOMMENDATION_PROMPT_VERSION = "atlas-school-plan-v2";
-export const RECOMMENDATION_MODEL = process.env.OPENAI_RECOMMENDATION_MODEL ?? "gpt-5-mini";
+export const RECOMMENDATION_MODEL = process.env.OPENAI_RECOMMENDATION_MODEL ?? "gpt-4.1-mini";
 
 export type ApplicantProfile = {
   currentDegree?: string; currentInstitution?: string; institutionCountry?: string; currentMajor?: string;
@@ -25,7 +25,7 @@ export type AIProgramRecommendation = {
 };
 
 export type AIRecommendationProvider = { generate(profile: ApplicantProfile, relaxed?: boolean): Promise<AIProgramRecommendation[]> };
-export type SchoolRecommendationErrorCode = "OPENAI_API_KEY_MISSING" | "OPENAI_AUTHENTICATION_FAILED" | "OPENAI_INSUFFICIENT_QUOTA" | "OPENAI_RATE_LIMITED" | "OPENAI_PERMISSION_DENIED" | "OPENAI_INVALID_RESPONSE" | "OPENAI_REQUEST_FAILED";
+export type SchoolRecommendationErrorCode = "OPENAI_API_KEY_MISSING" | "OPENAI_AUTHENTICATION_FAILED" | "OPENAI_INSUFFICIENT_QUOTA" | "OPENAI_RATE_LIMITED" | "OPENAI_PERMISSION_DENIED" | "OPENAI_TIMEOUT" | "OPENAI_INVALID_RESPONSE" | "OPENAI_REQUEST_FAILED";
 
 export class SchoolRecommendationError extends Error {
   constructor(public readonly code: SchoolRecommendationErrorCode) { super(code); this.name = "SchoolRecommendationError"; }
@@ -34,7 +34,7 @@ export class SchoolRecommendationError extends Error {
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new SchoolRecommendationError("OPENAI_API_KEY_MISSING");
-  return new OpenAI({ apiKey, timeout: 105_000, maxRetries: 1 });
+  return new OpenAI({ apiKey, timeout: 45_000, maxRetries: 0 });
 }
 
 export function normalizeOpenAIError(error: unknown): SchoolRecommendationError {
@@ -44,6 +44,7 @@ export function normalizeOpenAIError(error: unknown): SchoolRecommendationError 
   if (value?.status === 401) return new SchoolRecommendationError("OPENAI_AUTHENTICATION_FAILED");
   if (value?.status === 403) return new SchoolRecommendationError("OPENAI_PERMISSION_DENIED");
   if (value?.status === 429) return new SchoolRecommendationError("OPENAI_RATE_LIMITED");
+  if ((error as { name?: string })?.name === "APIConnectionTimeoutError" || value?.code === "ETIMEDOUT") return new SchoolRecommendationError("OPENAI_TIMEOUT");
   return new SchoolRecommendationError("OPENAI_REQUEST_FAILED");
 }
 
@@ -68,14 +69,41 @@ export function buildApplicantProfile(raw: StudentProfile, profile: UnderstoodPr
 
 const schema = { type: "object", additionalProperties: false, required: ["recommendations"], properties: { recommendations: { type: "array", minItems: 8, maxItems: 20, items: { type: "object", additionalProperties: false, required: ["schoolName","schoolNameLocal","programName","programNameLocal","country","city","degreeLevel","subjectArea","category","estimatedFitScore","recommendationReasons","applicantStrengths","admissionConcerns","admissionRequirements","missingRequirements","verificationQueries","expectedOfficialDomain","possibleOfficialUrl","confidence"], properties: { schoolName:{type:"string"},schoolNameLocal:{type:["string","null"]},programName:{type:"string"},programNameLocal:{type:["string","null"]},country:{type:"string"},city:{type:["string","null"]},degreeLevel:{type:"string",enum:["bachelor","master","doctorate"]},subjectArea:{type:"string"},category:{type:"string",enum:["reach","target","safer","exploratory"]},estimatedFitScore:{type:"number",minimum:0,maximum:100},recommendationReasons:{type:"array",items:{type:"string"}},applicantStrengths:{type:"array",items:{type:"string"}},admissionConcerns:{type:"array",items:{type:"string"}},admissionRequirements:{type:"array",minItems:7,maxItems:7,items:{type:"object",additionalProperties:false,required:["category","requirement","applicantAssessment","status","sourceUrl"],properties:{category:{type:"string",enum:["degree","grade","subject","language","experience","prerequisite","portfolio"]},requirement:{type:["string","null"]},applicantAssessment:{type:"string"},status:{type:"string",enum:["meets","mostly_meets","needs_confirmation","gap_detected","unknown"]},sourceUrl:{type:["string","null"]}}}},missingRequirements:{type:"array",items:{type:"string"}},verificationQueries:{type:"array",items:{type:"string"}},expectedOfficialDomain:{type:["string","null"]},possibleOfficialUrl:{type:["string","null"]},confidence:{type:"number",minimum:0,maximum:1} } } } } } as const;
 
+void schema;
+
+const fastSchema = {
+  type: "object", additionalProperties: false, required: ["recommendations"], properties: {
+    recommendations: { type: "array", minItems: 6, maxItems: 6, items: {
+      type: "object", additionalProperties: false,
+      required: ["schoolName", "programName", "country", "degreeLevel", "subjectArea", "category", "estimatedFitScore", "recommendationReasons", "requirementNotes", "expectedOfficialDomain", "possibleOfficialUrl", "confidence"],
+      properties: {
+        schoolName: { type: "string" }, programName: { type: "string" }, country: { type: "string" },
+        degreeLevel: { type: "string", enum: ["bachelor", "master", "doctorate"] }, subjectArea: { type: "string" },
+        category: { type: "string", enum: ["reach", "target", "safer", "exploratory"] }, estimatedFitScore: { type: "number", minimum: 0, maximum: 100 },
+        recommendationReasons: { type: "array", maxItems: 3, items: { type: "string" } },
+        requirementNotes: { type: "object", additionalProperties: false, required: ["degree", "grade", "subject", "language", "experience", "prerequisite", "portfolio"], properties: {
+          degree: { type: ["string", "null"] }, grade: { type: ["string", "null"] }, subject: { type: ["string", "null"] }, language: { type: ["string", "null"] }, experience: { type: ["string", "null"] }, prerequisite: { type: ["string", "null"] }, portfolio: { type: ["string", "null"] },
+        } },
+        expectedOfficialDomain: { type: ["string", "null"] }, possibleOfficialUrl: { type: ["string", "null"] }, confidence: { type: "number", minimum: 0, maximum: 1 },
+      },
+    } },
+  },
+} as const;
+
+const requirementCategories = ["degree", "grade", "subject", "language", "experience", "prerequisite", "portfolio"] as const;
+
 export class OpenAIRecommendationProvider implements AIRecommendationProvider {
   async generate(profile: ApplicantProfile, relaxed = false) {
-    const instructions = `You are Atlas's university programme planning engine. Return 10-20 real, specific university degree programmes suitable for the applicant. Only use countries in targetCountries. School and programme names must be separate. Never return books, articles, rankings, marketplaces, training courses, aggregators, or non-higher-education institutions. Do not require an Atlas database match. For every programme, include structured admission requirements for degree, grade, subject background, language, experience, prerequisites, and portfolio/special requirements, together with an applicant assessment. Use a programme's official admissions URL when known. Set requirement to null and status to unknown when a requirement cannot be established; never invent a threshold. Uncertain but plausible programmes may be returned with low confidence and verification queries. Expand subject semantics where useful.${relaxed ? " Use broader related subject names while preserving countries and degree level." : ""}`;
+    const instructions = `You are Atlas's university programme planning engine. Return exactly 6 real, specific university degree programmes suitable for the applicant. Only use countries in targetCountries. School and programme names must be separate. Never return books, articles, rankings, marketplaces, training courses, aggregators, or non-higher-education institutions. Do not require an Atlas database match. Use a programme's official admissions URL only when known; otherwise return null. Do not invent admission requirements. Expand subject semantics where useful.${relaxed ? " Use broader related subject names while preserving countries and degree level." : ""}`;
     try {
-      const response = await getOpenAIClient().responses.create({ model: RECOMMENDATION_MODEL, reasoning: { effort: "low" }, max_output_tokens: 12_000, instructions, input: JSON.stringify(profile), text: { format: { type: "json_schema", name: "atlas_programme_recommendations", strict: true, schema } } });
+      const startedAt = Date.now();
+      const response = await getOpenAIClient().responses.create({ model: RECOMMENDATION_MODEL, max_output_tokens: 2_400, instructions: `${instructions} For requirementNotes, return concise programme-specific information only when reasonably known; otherwise use null. Atlas will display every note as provisional and pending official verification.`, input: JSON.stringify(profile), text: { format: { type: "json_schema", name: "atlas_programme_recommendations", strict: true, schema: fastSchema } } });
+      console.info("[atlas-openai]", { stage: "recommendation_generation", durationMs: Date.now() - startedAt, model: RECOMMENDATION_MODEL, promptVersion: RECOMMENDATION_PROMPT_VERSION, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens });
       if (!response.output_text) throw new SchoolRecommendationError("OPENAI_INVALID_RESPONSE");
       try {
-        const recommendations = (JSON.parse(response.output_text) as { recommendations?: AIProgramRecommendation[] }).recommendations;
+        type FastRecommendation = Partial<AIProgramRecommendation> & { requirementNotes?: Partial<Record<(typeof requirementCategories)[number], string | null>> };
+        const raw = (JSON.parse(response.output_text) as { recommendations?: FastRecommendation[] }).recommendations;
+        const recommendations = raw?.map((item) => ({ ...item, schoolNameLocal: null, programNameLocal: null, city: null, applicantStrengths: [], admissionConcerns: [], missingRequirements: ["录取要求待 Atlas 核验"], verificationQueries: [`${item.schoolName ?? ""} ${item.programName ?? ""} official admissions`], admissionRequirements: requirementCategories.map(category => ({ category, requirement: item.requirementNotes?.[category] ?? null, applicantAssessment: item.recommendationReasons?.join("；") ?? "待 Atlas 核验", status: "needs_confirmation" as const, sourceUrl: null })) })) as AIProgramRecommendation[] | undefined;
         if (!Array.isArray(recommendations)) throw new SchoolRecommendationError("OPENAI_INVALID_RESPONSE");
         return recommendations;
       } catch (error) {
@@ -92,4 +120,3 @@ export function aiRecommendationToCandidate(item: AIProgramRecommendation): Prog
   const programme: VerifiedProgramme = { institutionName:item.schoolName,programmeName:item.programName,country:item.country,officialProgrammeUrl:url,officialRootDomain:item.expectedOfficialDomain ?? "pending.atlas",degreeType:item.degreeLevel,degreeLevel:item.degreeLevel,campus:pending(item.city,url),fieldRelation:"highly_related",sourceType:"official",active:pending<boolean>(null,url),intake:pending<string>(null,url),teachingLanguage:pending<string>(null,url),degreeRequirement:pending<string>(null,url),subjectRequirement:pending<string>(null,url),gradeRequirement:pending<string>(null,url),languageRequirement:pending<string>(null,url),tuition:pending<number>(null,url),tuitionCurrency:pending<string>(null,url),deadline:pending<string>(null,url),applicationUrl:pending<string>(null,url),discoveryQuery:item.verificationQueries.join(" | "),discoveredAt:new Date().toISOString() };
   return { institution:item.schoolName,programme:item.programName,institutionName:item.schoolName,programmeName:item.programName,country:item.country,degreeLevel:item.degreeLevel,officialUrl:url,officialProgrammeUrl:url,fieldRelation:"highly_related",academicStatus:"pending",languageStatus:"pending",budgetStatus:"pending",timelineStatus:"pending",verificationStatus:"pending",missingInformation:item.missingRequirements,sources:[],matchExplanation:item.recommendationReasons.join("；"),recommendationBand:item.category === "exploratory" ? "needs_confirmation" : item.category,score:item.estimatedFitScore,verifiedProgramme:programme,generatedByAI:true,aiRecommendation:item,admissionRequirements:item.admissionRequirements };
 }
-

@@ -7,6 +7,7 @@ import { commonMaterials, type SchoolRecommendation } from "@/lib/application-pr
 import { readApplicationRecords } from "@/lib/application-store";
 import { readRecommendationCandidates } from "@/lib/planning-store";
 import { readStudentProfile, type StudentProfile } from "@/lib/student-profile";
+import { getCandidatePresentation } from "@/lib/recommendation/presentation";
 import { MaterialsWorkspaceClient } from "./MaterialsWorkspaceClient";
 
 export function ApplicationMaterialsPageClient({ applicationId }: { applicationId: string }) {
@@ -16,6 +17,7 @@ export function ApplicationMaterialsPageClient({ applicationId }: { applicationI
   if (!record) return <DashboardShell><div className="mx-auto max-w-xl rounded-[24px] border border-[#e7d0c7] bg-[#fffaf3] p-7 text-center"><h1 className="font-editorial text-4xl font-semibold">没有找到这条申请记录</h1><Link href="/applications" className="mt-6 inline-flex rounded-full bg-[#2f2924] px-6 py-3 text-sm text-white">返回我的申请</Link></div></DashboardShell>;
 
   const candidate = readRecommendationCandidates(record.planningRunId)?.find((item) => item.officialProgrammeUrl === record.schoolRecommendationId);
+  const candidatePresentation = candidate ? getCandidatePresentation(candidate) : null;
   const profile = readStudentProfile();
   const school: SchoolRecommendation = {
     id: record.schoolRecommendationId,
@@ -40,9 +42,11 @@ export function ApplicationMaterialsPageClient({ applicationId }: { applicationI
     isSelected: true,
     isConfirmed: true,
     officialProgramUrl: candidate?.officialProgrammeUrl,
-    applicationUrl: candidate?.verifiedProgramme.applicationUrl.value ?? undefined,
-    applicationLinkStatus: candidate?.verifiedProgramme.applicationUrl.value ? "verified" : "needs_review",
-    admissionRequirements: candidate?.admissionRequirements?.map((item) => ({ id: item.category, label: { degree: "学位要求", grade: "成绩或 GPA 要求", subject: "本科专业背景", language: "语言成绩", experience: "工作或实习经历", prerequisite: "先修课程", portfolio: "作品集或其他特殊要求" }[item.category], schoolRequirement: item.requirement ?? "该项要求仍待官方核验", userSituation: applicantSituation(item.category, profile, decodedApplicationId), status: item.status, officialProgramUrl: item.sourceUrl ?? candidate.officialProgrammeUrl })),
+    applicationUrl: candidatePresentation?.applicationUrl,
+    applicationLinkStatus: candidatePresentation?.applicationUrl ? "verified" : "needs_review",
+    admissionRequirements: candidate?.admissionRequirements
+      ?.filter((item) => ["degree", "grade", "subject", "language"].includes(item.category) || Boolean(item.requirement?.trim() && item.sourceUrl))
+      .map((item) => ({ id: item.category, label: { degree: "学位要求", grade: "成绩或 GPA 要求", subject: "本科专业背景", language: "语言成绩", experience: "工作或实习经历", prerequisite: "先修课程", portfolio: "作品集或其他特殊要求" }[item.category], schoolRequirement: item.requirement ? `AI 初步对比：${item.requirement}（待官方核验）` : `AI 匹配依据：${candidate.matchExplanation || "当前背景与项目方向初步相关"}；具体门槛待官方核验`, userSituation: applicantSituation(item.category, profile, decodedApplicationId), status: "needs_confirmation", officialProgramUrl: item.sourceUrl ?? candidate.officialProgrammeUrl })),
     recommendationContent: { summary: candidate?.matchExplanation ?? "Atlas 已根据本次规划创建材料工作区。", personalFit: candidate?.matchExplanation ?? "", schoolHighlights: "", programHighlights: "", cautions: candidate?.missingInformation ?? [], sources: [] },
   };
 
@@ -61,4 +65,3 @@ function applicantSituation(category: string, profile: StudentProfile, applicati
   if (category === "prerequisite") return education?.prerequisiteCourses.length ? `已填写课程：${education.prerequisiteCourses.join("、")}` : "尚未填写可逐项核对的先修课程";
   return "当前资料中尚未提供作品集或其他特殊材料";
 }
-

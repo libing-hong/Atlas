@@ -16,6 +16,7 @@ export function RecommendationSchoolCard({ school, ranking, isSelected, isCompar
   onDetail: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const pendingVerification = school.category === "manual_review";
   const rankingDisplay = ranking?.rankingDisplay ?? "暂无适用的QS排名数据";
   const rankingLabel = ranking?.rankingType === "subject" && ranking.rankingSubject
     ? `QS 2026 ${ranking.rankingSubject}排名`
@@ -59,7 +60,7 @@ export function RecommendationSchoolCard({ school, ranking, isSelected, isCompar
       <button type="button" onClick={onDetail} className="inline-flex w-fit items-center gap-2 whitespace-nowrap rounded-full border border-[#d8ccbe] px-4 py-2.5 text-sm text-[#4a3d34]"><BookOpenText size={15} />查看课程与专业方向</button>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         <button type="button" onClick={onCompare} className={`inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-full border px-4 py-2.5 text-sm ${isCompared ? "border-[#789276] bg-[#e7ece7] text-[#4f6d54]" : "border-[#d8ccbe] text-[#4a3d34]"}`}><GitCompareArrows size={15} />{isCompared ? "移出学校对比" : "加入学校对比"}</button>
-        <button type="button" onClick={onSelect} className={`inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium ${isSelected ? "border border-[#c9dbc5] bg-[#e7ece7] text-[#4f6d54]" : "bg-[#2f2924] text-white"}`}>{isSelected ? <Check size={15} /> : <Plus size={15} />}{isSelected ? "已加入名单" : "加入申请名单"}</button>
+        <button type="button" onClick={onSelect} disabled={pendingVerification} className={`inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium ${pendingVerification ? "cursor-not-allowed bg-[#ded5ca] text-[#8f847a]" : isSelected ? "border border-[#c9dbc5] bg-[#e7ece7] text-[#4f6d54]" : "bg-[#2f2924] text-white"}`}>{pendingVerification ? null : isSelected ? <Check size={15} /> : <Plus size={15} />}{pendingVerification ? "待 Atlas 核验" : isSelected ? "已加入名单" : "加入申请名单"}</button>
       </div>
     </div>
     <p className="mt-3 text-xs leading-5 text-[#8f847a]">Atlas 方案匹配度用于帮助排序申请方案，不代表学校录取概率。推荐不等于获得录取资格，最终结果仍以学校官方审核为准。</p>

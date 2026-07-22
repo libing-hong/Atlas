@@ -4,8 +4,10 @@ import { Card, CardHeader } from "@/components/Card";
 import { DashboardShell } from "@/components/PageShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { applications, materials, orders, reportHighlights, students } from "@/lib/mock-data";
+import { requirePageRole } from "@/lib/server/auth";
 
 export default async function AdminStudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requirePageRole(["admin"]);
   const { id } = await params;
   const student = students.find((item) => item.id === id);
 
