@@ -43,6 +43,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
   const primaryEducation = profile.educationHistory[0];
   const [institution, setInstitution] = useState<InstitutionVerification>({ complete: false, institutionName: primaryEducation?.institutionNameZh ?? "", englishName: primaryEducation?.institutionNameEn ?? "", average: primaryEducation?.officialAverage ?? primaryEducation?.weightedAverage ?? primaryEducation?.arithmeticAverage ?? 0 });
   const [applicationMode, setApplicationMode] = useState<ApplicationMode>("unselected");
+  const [journeyStageIndex, setJourneyStageIndex] = useState(record.journeyStageIndex ?? (record.status === "offer_received" ? 1 : 0));
   const institutionRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -91,13 +92,14 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
     setActiveRequirement(requirement);
   }
 
-  function openPicker(materialId: string) { if (!uploadsEnabled) { setNotice("Demo Mode：真实敏感文件上传尚未开放，请勿上传护照、成绩单或资金证明。"); return; } setPreviewId(materialId); fileInputRef.current?.click(); }
+  function openPicker(materialId: string) { setPreviewId(materialId); if (!uploadsEnabled) setNotice("Prototype Mode：本次仅记录文件名称与模拟状态，文件内容不会上传。请使用测试文件。"); fileInputRef.current?.click(); }
   function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file || !previewId) return;
     const material = baseMaterials.find((item) => item.id === previewId);
     if (!material) return;
     setFiles((current) => ({ ...current, [previewId]: file.name }));
+    if (!uploadsEnabled) window.localStorage.setItem(`atlas.prototype.material.${applicationId}.${previewId}`, JSON.stringify({ name: file.name, size: file.size, selectedAt: new Date().toISOString() }));
     setStatuses((current) => ({ ...current, [previewId]: "uploading" }));
     setNotice("");
     window.setTimeout(() => {
@@ -151,8 +153,15 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
 
     <Card><div className="flex items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.22em] text-[#9a8b7c]">材料状态</p><h2 className="mt-2 font-editorial text-3xl font-semibold text-[#2f2924]">申请材料</h2><p className="mt-2 text-sm leading-6 text-[#6f6256]">Atlas 会将已上传的通用材料自动关联到符合要求的学校。</p></div><span className="text-sm text-[#8f847a]">已确认 {Object.values(statuses).filter((status) => status === "prepared" || status === "confirmed").length} 项</span></div><div className="mt-5 grid gap-3 md:grid-cols-2">{baseMaterials.map((material) => <MaterialRow key={material.id} material={material} status={statuses[material.id] ?? material.status} fileName={files[material.id]} onUpload={() => openPicker(material.id)} onConfirm={() => confirmFile(material)} onPreview={() => setNotice(`${material.name} 当前文件：${files[material.id] ?? "Atlas 已检测到的材料"}`)} />)}</div></Card>
 
+    <PrototypeJourneyControls stageIndex={journeyStageIndex} onAdvance={() => { const next = Math.min(7, journeyStageIndex + 1); setJourneyStageIndex(next); updateApplicationRecord(applicationId, { journeyStageIndex: next, status: next >= 1 ? "offer_received" : record.status, applicationProgress: next === 0 ? record.applicationProgress : 100, nextAction: next === 7 ? "完成毕业阶段模拟" : "继续下一阶段模拟" }); setNotice(`Prototype Mode：已推进到第 ${next + 1} 阶段。`); }} onReset={() => { setJourneyStageIndex(0); updateApplicationRecord(applicationId, { journeyStageIndex: 0, status: "ready_to_apply", applicationProgress: 78, nextAction: "核对申请信息并提交申请" }); setNotice("Prototype Mode：已重置为申请阶段。"); }} />
+
     {activeRequirement ? <RequirementConfirmModal requirement={activeRequirement} materialStatuses={statuses} profile={profile} onProfileChange={(next) => { writeStudentProfile(next); setProfile(next); }} onClose={() => setActiveRequirement(null)} onMessage={setNotice} onConfirm={async () => { await new Promise((resolve) => window.setTimeout(resolve, 650)); persistConfirmations([...new Set([...confirmedIds, activeRequirement.id])]); setActiveRequirement(null); setNotice(`${activeRequirement.label}已确认，Atlas 已重新计算录取要求状态。`); }} /> : null}
   </div>;
+}
+
+const prototypeStages = ["申请", "录取", "签证", "行前准备", "抵达", "安顿", "学生生活", "毕业"];
+function PrototypeJourneyControls({ stageIndex, onAdvance, onReset }: { stageIndex: number; onAdvance: () => void; onReset: () => void }) {
+  return <Card className="border border-[#d8ccbe] p-5 md:p-7"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="text-xs uppercase tracking-[0.2em] text-[#9a8b7c]">Prototype Journey</p><h2 className="mt-2 font-editorial text-3xl font-semibold text-[#2f2924]">阶段模拟推进</h2><p className="mt-2 text-sm leading-6 text-[#6f6256]">仅更新当前浏览器中的模拟状态，不代表真实申请、录取或签证结果。</p></div><span className="w-fit rounded-full bg-[#eef4ed] px-3 py-1 text-xs text-[#4f6d54]">第 {stageIndex + 1} 阶段 · {prototypeStages[stageIndex]}</span></div><div className="mt-5 flex flex-wrap gap-2">{prototypeStages.map((stage, index) => <span key={stage} className={`rounded-full border px-3 py-2 text-xs ${index < stageIndex ? "border-[#c9dbc5] bg-[#e7ece7] text-[#4f6d54]" : index === stageIndex ? "border-[#2f2924] bg-[#2f2924] text-white" : "border-[#d8ccbe] text-[#8f847a]"}`}>{stage}</span>)}</div><div className="mt-5 flex flex-wrap gap-3"><button type="button" onClick={onAdvance} disabled={stageIndex >= prototypeStages.length - 1} className={greenButton}>{stageIndex >= prototypeStages.length - 1 ? "模拟已完成" : `完成并进入${prototypeStages[stageIndex + 1]}`}</button><button type="button" onClick={onReset} className={secondaryButton}>重置模拟</button></div></Card>;
 }
 
 function ConfirmationActions({ pending, onOpen }: { pending: AdmissionRequirement[]; onOpen: (requirement: AdmissionRequirement) => void }) {

@@ -20,6 +20,7 @@ export function MaterialCenterClient({
   readiness: { ready: number; total: number; missing: number; expiring: number };
 }) {
   const [category, setCategory] = useState("All");
+  const [uploadMessage, setUploadMessage] = useState("");
   const { t, text } = useLanguage();
   const filteredDocuments = useMemo(
     () => (category === "All" ? documents : documents.filter((document) => document.category === category)),
@@ -58,23 +59,22 @@ export function MaterialCenterClient({
                 t({ en: "Add Recommendation Letter", zh: "添加推荐信" }),
                 t({ en: "Track recommenders and letter status.", zh: "追踪推荐人和推荐信状态。" }),
               ],
-            ].map(([title, description]) => (
-              <button
+            ].map(([title, description], index) => (
+              <label
                 key={title}
-                type="button"
-                disabled
-                aria-label={`${title}（即将开放）`}
-                className="cursor-not-allowed rounded-[20px] border border-[#d8ccbe] bg-[#f7f0e8] p-4 text-left opacity-70"
+                className="cursor-pointer rounded-[20px] border border-[#d8ccbe] bg-[#f7f0e8] p-4 text-left transition hover:bg-[#fffaf3]"
               >
                 <Upload size={18} className="text-[#8ea08b]" />
                 <span className="mt-3 block text-sm font-semibold text-[#2f2924]">{title}</span>
                 <span className="mt-2 block text-sm leading-6 text-[#6f6256]">{description}</span>
-                <span className="mt-3 block text-xs uppercase tracking-[0.18em] text-[#9a8b7c]">
-                  <T en="Coming soon" zh="即将开放" />
+                <span className="mt-3 block text-xs uppercase tracking-[0.18em] text-[#6f856a]">
+                  <T en="Choose test file" zh="选择测试文件" />
                 </span>
-              </button>
+                <input type="file" className="sr-only" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; const key = ["cv", "personal-statement", "recommendation-letter"][index]; window.localStorage.setItem(`atlas.prototype.priority-material.${key}`, JSON.stringify({ name: file.name, size: file.size, selectedAt: new Date().toISOString() })); setUploadMessage(`${title} 已记录为本地模拟材料；文件内容没有上传。`); event.target.value = ""; }} />
+              </label>
             ))}
           </div>
+          {uploadMessage ? <p role="status" className="mt-4 rounded-xl bg-[#eef4ed] p-3 text-sm text-[#4f6d54]">{uploadMessage}</p> : null}
         </Card>
       </section>
 

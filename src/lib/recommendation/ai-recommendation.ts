@@ -75,12 +75,15 @@ const fastSchema = {
   type: "object", additionalProperties: false, required: ["recommendations"], properties: {
     recommendations: { type: "array", minItems: 6, maxItems: 6, items: {
       type: "object", additionalProperties: false,
-      required: ["schoolName", "programName", "country", "degreeLevel", "subjectArea", "category", "estimatedFitScore", "recommendationReasons", "expectedOfficialDomain", "possibleOfficialUrl", "confidence"],
+      required: ["schoolName", "programName", "country", "degreeLevel", "subjectArea", "category", "estimatedFitScore", "recommendationReasons", "requirementNotes", "expectedOfficialDomain", "possibleOfficialUrl", "confidence"],
       properties: {
         schoolName: { type: "string" }, programName: { type: "string" }, country: { type: "string" },
         degreeLevel: { type: "string", enum: ["bachelor", "master", "doctorate"] }, subjectArea: { type: "string" },
         category: { type: "string", enum: ["reach", "target", "safer", "exploratory"] }, estimatedFitScore: { type: "number", minimum: 0, maximum: 100 },
         recommendationReasons: { type: "array", maxItems: 3, items: { type: "string" } },
+        requirementNotes: { type: "object", additionalProperties: false, required: ["degree", "grade", "subject", "language", "experience", "prerequisite", "portfolio"], properties: {
+          degree: { type: ["string", "null"] }, grade: { type: ["string", "null"] }, subject: { type: ["string", "null"] }, language: { type: ["string", "null"] }, experience: { type: ["string", "null"] }, prerequisite: { type: ["string", "null"] }, portfolio: { type: ["string", "null"] },
+        } },
         expectedOfficialDomain: { type: ["string", "null"] }, possibleOfficialUrl: { type: ["string", "null"] }, confidence: { type: "number", minimum: 0, maximum: 1 },
       },
     } },
@@ -94,12 +97,13 @@ export class OpenAIRecommendationProvider implements AIRecommendationProvider {
     const instructions = `You are Atlas's university programme planning engine. Return exactly 6 real, specific university degree programmes suitable for the applicant. Only use countries in targetCountries. School and programme names must be separate. Never return books, articles, rankings, marketplaces, training courses, aggregators, or non-higher-education institutions. Do not require an Atlas database match. Use a programme's official admissions URL only when known; otherwise return null. Do not invent admission requirements. Expand subject semantics where useful.${relaxed ? " Use broader related subject names while preserving countries and degree level." : ""}`;
     try {
       const startedAt = Date.now();
-      const response = await getOpenAIClient().responses.create({ model: RECOMMENDATION_MODEL, max_output_tokens: 1_800, instructions, input: JSON.stringify(profile), text: { format: { type: "json_schema", name: "atlas_programme_recommendations", strict: true, schema: fastSchema } } });
+      const response = await getOpenAIClient().responses.create({ model: RECOMMENDATION_MODEL, max_output_tokens: 2_400, instructions: `${instructions} For requirementNotes, return concise programme-specific information only when reasonably known; otherwise use null. Atlas will display every note as provisional and pending official verification.`, input: JSON.stringify(profile), text: { format: { type: "json_schema", name: "atlas_programme_recommendations", strict: true, schema: fastSchema } } });
       console.info("[atlas-openai]", { stage: "recommendation_generation", durationMs: Date.now() - startedAt, model: RECOMMENDATION_MODEL, promptVersion: RECOMMENDATION_PROMPT_VERSION, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens });
       if (!response.output_text) throw new SchoolRecommendationError("OPENAI_INVALID_RESPONSE");
       try {
-        const raw = (JSON.parse(response.output_text) as { recommendations?: Array<Partial<AIProgramRecommendation>> }).recommendations;
-        const recommendations = raw?.map((item) => ({ ...item, schoolNameLocal: null, programNameLocal: null, city: null, applicantStrengths: [], admissionConcerns: [], missingRequirements: ["录取要求待 Atlas 核验"], verificationQueries: [`${item.schoolName ?? ""} ${item.programName ?? ""} official admissions`], admissionRequirements: requirementCategories.map(category => ({ category, requirement: null, applicantAssessment: "待 Atlas 核验", status: "unknown" as const, sourceUrl: null })) })) as AIProgramRecommendation[] | undefined;
+        type FastRecommendation = Partial<AIProgramRecommendation> & { requirementNotes?: Partial<Record<(typeof requirementCategories)[number], string | null>> };
+        const raw = (JSON.parse(response.output_text) as { recommendations?: FastRecommendation[] }).recommendations;
+        const recommendations = raw?.map((item) => ({ ...item, schoolNameLocal: null, programNameLocal: null, city: null, applicantStrengths: [], admissionConcerns: [], missingRequirements: ["录取要求待 Atlas 核验"], verificationQueries: [`${item.schoolName ?? ""} ${item.programName ?? ""} official admissions`], admissionRequirements: requirementCategories.map(category => ({ category, requirement: item.requirementNotes?.[category] ?? null, applicantAssessment: item.recommendationReasons?.join("；") ?? "待 Atlas 核验", status: "needs_confirmation" as const, sourceUrl: null })) })) as AIProgramRecommendation[] | undefined;
         if (!Array.isArray(recommendations)) throw new SchoolRecommendationError("OPENAI_INVALID_RESPONSE");
         return recommendations;
       } catch (error) {

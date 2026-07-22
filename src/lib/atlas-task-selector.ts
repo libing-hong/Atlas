@@ -76,7 +76,7 @@ function taskCopy(record: ApplicationRecord) {
 }
 
 export function getJourneyStagesForApplicationRecords(records: ApplicationRecord[]): JourneyStage[] {
-  const currentIndex = records.some((record) => record.status === "offer_received") ? 1 : 0;
+  const currentIndex = Math.max(0, Math.min(stageNames.length - 1, ...records.map((record) => record.journeyStageIndex ?? (record.status === "offer_received" ? 1 : 0))));
   return stageNames.map((name, index) => ({
     id: name.toLowerCase().replaceAll(" ", "-"),
     name,
@@ -157,4 +157,3 @@ export function getAtlasPrimaryTask({ applicationRecords, selectedSchoolIds }: {
     userRequiredItems: node.missingInformation,
   };
 }
-

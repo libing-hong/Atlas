@@ -58,6 +58,7 @@ export type ApplicationRecord = {
   nextAction: string;
   nextDeadline?: string;
   serviceType: "none" | "single_school" | "full_service";
+  journeyStageIndex?: number;
 };
 
 export type SchoolRecommendation = {

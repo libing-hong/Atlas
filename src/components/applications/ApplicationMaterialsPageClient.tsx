@@ -44,7 +44,7 @@ export function ApplicationMaterialsPageClient({ applicationId }: { applicationI
     officialProgramUrl: candidate?.officialProgrammeUrl,
     applicationUrl: candidatePresentation?.applicationUrl,
     applicationLinkStatus: candidatePresentation?.applicationUrl ? "verified" : "needs_review",
-    admissionRequirements: candidate?.admissionRequirements?.map((item) => ({ id: item.category, label: { degree: "学位要求", grade: "成绩或 GPA 要求", subject: "本科专业背景", language: "语言成绩", experience: "工作或实习经历", prerequisite: "先修课程", portfolio: "作品集或其他特殊要求" }[item.category], schoolRequirement: item.requirement ?? "该项要求仍待官方核验", userSituation: applicantSituation(item.category, profile, decodedApplicationId), status: item.status, officialProgramUrl: item.sourceUrl ?? candidate.officialProgrammeUrl })),
+    admissionRequirements: candidate?.admissionRequirements?.map((item) => ({ id: item.category, label: { degree: "学位要求", grade: "成绩或 GPA 要求", subject: "本科专业背景", language: "语言成绩", experience: "工作或实习经历", prerequisite: "先修课程", portfolio: "作品集或其他特殊要求" }[item.category], schoolRequirement: item.requirement ? `AI 初步对比：${item.requirement}（待官方核验）` : `AI 匹配依据：${candidate.matchExplanation || "当前背景与项目方向初步相关"}；具体门槛待官方核验`, userSituation: applicantSituation(item.category, profile, decodedApplicationId), status: "needs_confirmation", officialProgramUrl: item.sourceUrl ?? candidate.officialProgrammeUrl })),
     recommendationContent: { summary: candidate?.matchExplanation ?? "Atlas 已根据本次规划创建材料工作区。", personalFit: candidate?.matchExplanation ?? "", schoolHighlights: "", programHighlights: "", cautions: candidate?.missingInformation ?? [], sources: [] },
   };
 
