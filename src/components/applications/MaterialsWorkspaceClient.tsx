@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, Check, CheckCircle2, CircleAlert, Copy, FileUp, LoaderCircle, Upload, X } from "lucide-react";
 import { Card } from "@/components/Card";
@@ -60,7 +59,6 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
   const gradeRequirement = requirements.find((item) => item.sourceId?.includes("cn-list") || item.label.includes("院校成绩"));
   const effectiveConfirmedIds = institution.complete && gradeRequirement ? [...new Set([...confirmedIds, gradeRequirement.id])] : confirmedIds;
   const pending = requirements.filter((item) => item.status === "needs_confirmation" && !effectiveConfirmedIds.includes(item.id));
-  const materialsReady = baseMaterials.every((material) => ["prepared", "confirmed"].includes(statuses[material.id] ?? material.status));
 
   function persistConfirmations(ids: string[]) {
     setConfirmedIds(ids);
@@ -152,31 +150,8 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
 
     <Card><div className="flex items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.22em] text-[#9a8b7c]">材料状态</p><h2 className="mt-2 font-editorial text-3xl font-semibold text-[#2f2924]">申请材料</h2><p className="mt-2 text-sm leading-6 text-[#6f6256]">Atlas 会将已上传的通用材料自动关联到符合要求的学校。</p></div><span className="text-sm text-[#8f847a]">已确认 {Object.values(statuses).filter((status) => status === "prepared" || status === "confirmed").length} 项</span></div><div className="mt-5 grid gap-3 md:grid-cols-2">{baseMaterials.map((material) => <MaterialRow key={material.id} material={material} status={statuses[material.id] ?? material.status} fileName={files[material.id]} onUpload={() => openPicker(material.id)} onConfirm={() => confirmFile(material)} onPreview={() => setNotice(`${material.name} 当前文件：${files[material.id] ?? "Atlas 已检测到的材料"}`)} />)}</div></Card>
 
-    {materialsReady ? <SubmissionReadyCard school={school} applicationId={applicationId} /> : null}
-
     {activeRequirement ? <RequirementConfirmModal requirement={activeRequirement} materialStatuses={statuses} profile={profile} onProfileChange={(next) => { writeStudentProfile(next); setProfile(next); }} onClose={() => setActiveRequirement(null)} onMessage={setNotice} onConfirm={async () => { await new Promise((resolve) => window.setTimeout(resolve, 650)); persistConfirmations([...new Set([...confirmedIds, activeRequirement.id])]); setActiveRequirement(null); setNotice(`${activeRequirement.label}已确认，Atlas 已重新计算录取要求状态。`); }} /> : null}
   </div>;
-}
-
-function SubmissionReadyCard({ school, applicationId }: { school: SchoolRecommendation; applicationId: string }) {
-  const hasVerifiedPortal = school.applicationLinkStatus === "verified" && Boolean(school.applicationUrl);
-  return <Card className="border-2 border-[#5f805f] bg-[#f0f5ef] p-5 md:p-7">
-    <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
-      <div>
-        <div className="flex items-center gap-2 text-[#4f6d54]"><CheckCircle2 size={19} /><p className="text-xs font-semibold uppercase tracking-[0.18em]">材料准备完成</p></div>
-        <h2 className="mt-3 font-editorial text-4xl font-semibold text-[#2f2924]">材料已齐，可以提交学校申请</h2>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d5148]">请最后核对申请信息，然后选择自己前往学校官方系统提交，或由 Atlas 协助审核和递交。</p>
-      </div>
-      <span className="w-fit rounded-full border border-[#c9dbc5] bg-white px-3 py-1 text-xs font-medium text-[#4f6d54]">下一阶段已解锁</span>
-    </div>
-    <div className="mt-6 flex flex-wrap gap-3">
-      {hasVerifiedPortal ? <ApplicationEntryAction school={school} applicationId={applicationId} /> : null}
-      <Link href="/applications/service-comparison#submission" className={primaryButton}>{hasVerifiedPortal ? "由 Atlas 代提交" : "选择提交方式"}</Link>
-      {!hasVerifiedPortal && school.officialProgramUrl ? <a href={school.officialProgramUrl} target="_blank" rel="noopener noreferrer" className={secondaryButton}>查看学校官方专业页面<ArrowUpRight size={14} /></a> : null}
-      <Link href="/applications" className={secondaryButton}>返回我的申请</Link>
-    </div>
-    {!hasVerifiedPortal ? <p className="mt-4 text-xs leading-5 text-[#7b6e62]">该项目的正式申请入口仍待核验。Atlas 不会把未确认的网址冒充申请系统；你仍可先选择提交方式。</p> : null}
-  </Card>;
 }
 
 function ConfirmationActions({ pending, onOpen }: { pending: AdmissionRequirement[]; onOpen: (requirement: AdmissionRequirement) => void }) {

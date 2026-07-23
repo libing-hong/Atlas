@@ -3,18 +3,8 @@
     "institution": "KEDGE Business School",
     "programme": "MSc Arts & Creative Industries Management",
     "officialUrl": "https://student.kedge.edu/programmes/arts-creative-industries-management",
-    "countries": [
-      "法国",
-      "France"
-    ],
-    "fieldTerms": [
-      "Arts Management",
-      "Arts and Cultural Management",
-      "Cultural Management",
-      "Creative Industries Management",
-      "Management culturel",
-      "Industries créatives et culturelles"
-    ],
+    "countries": ["法国", "France"],
+    "fieldTerms": ["Arts Management", "Arts and Cultural Management", "Cultural Management", "Creative Industries Management", "Management culturel", "Industries créatives et culturelles"],
     "discoveryQuery": "official web discovery: Creative Industries Management France master",
     "discoveredAt": "2026-07-16T21:00:00.000Z",
     "sourceType": "external_official_discovery",
@@ -24,20 +14,8 @@
     "institution": "University College London",
     "programme": "Law LLM",
     "officialUrl": "https://www.ucl.ac.uk/prospective-students/graduate/taught-degrees/law-llm",
-    "countries": [
-      "英国",
-      "United Kingdom"
-    ],
-    "fieldTerms": [
-      "Law",
-      "LLM",
-      "Master of Laws",
-      "International Law",
-      "Business Law",
-      "Commercial Law",
-      "European Law",
-      "Human Rights Law"
-    ],
+    "countries": ["英国", "United Kingdom"],
+    "fieldTerms": ["Law", "LLM", "Master of Laws", "International Law", "Business Law", "Commercial Law", "European Law", "Human Rights Law"],
     "discoveryQuery": "official web discovery: site:ucl.ac.uk Law LLM admissions",
     "discoveredAt": "2026-07-17T10:00:00.000Z",
     "sourceType": "external_official_discovery",
@@ -47,20 +25,8 @@
     "institution": "The University of Edinburgh",
     "programme": "LLM in Law",
     "officialUrl": "https://www.law.ed.ac.uk/study/masters-degrees/llm-law",
-    "countries": [
-      "英国",
-      "United Kingdom"
-    ],
-    "fieldTerms": [
-      "Law",
-      "LLM",
-      "Master of Laws",
-      "International Law",
-      "Business Law",
-      "Commercial Law",
-      "European Law",
-      "Human Rights Law"
-    ],
+    "countries": ["英国", "United Kingdom"],
+    "fieldTerms": ["Law", "LLM", "Master of Laws", "International Law", "Business Law", "Commercial Law", "European Law", "Human Rights Law"],
     "discoveryQuery": "official web discovery: site:ed.ac.uk LLM Law admissions",
     "discoveredAt": "2026-07-17T10:00:00.000Z",
     "sourceType": "external_official_discovery",
@@ -70,18 +36,8 @@
     "institution": "Université de Strasbourg",
     "programme": "Master Droit international",
     "officialUrl": "https://droit.unistra.fr/formation/diplomes-detat/master/mentions-et-parcours-masters/droit-international/",
-    "countries": [
-      "法国",
-      "France"
-    ],
-    "fieldTerms": [
-      "Law",
-      "Master of Laws",
-      "International Law",
-      "European Law",
-      "Droit",
-      "Droit international"
-    ],
+    "countries": ["法国", "France"],
+    "fieldTerms": ["Law", "Master of Laws", "International Law", "European Law", "Droit", "Droit international"],
     "discoveryQuery": "official web discovery: site:unistra.fr Master Droit international admission",
     "discoveredAt": "2026-07-17T10:00:00.000Z",
     "sourceType": "external_official_discovery",
@@ -91,159 +47,12 @@
     "institution": "Université Paris-Panthéon-Assas",
     "programme": "Master Droit international",
     "officialUrl": "https://www.assas-universite.fr/fr/master-droit-international-parcours-administration-internationale",
-    "countries": [
-      "法国",
-      "France"
-    ],
-    "fieldTerms": [
-      "Law",
-      "Master of Laws",
-      "International Law",
-      "European Law",
-      "Droit",
-      "Droit international"
-    ],
+    "countries": ["法国", "France"],
+    "fieldTerms": ["Law", "Master of Laws", "International Law", "European Law", "Droit", "Droit international"],
     "discoveryQuery": "official web discovery: site:assas-universite.fr Master Droit international admission",
     "discoveredAt": "2026-07-17T10:00:00.000Z",
     "sourceType": "external_official_discovery",
     "verificationStatus": "verified"
-  },
-  {
-    "institution": "University of York",
-    "programme": "MSc International Business",
-    "officialUrl": "https://www.york.ac.uk/study/postgraduate-taught/courses/msc-international-business/",
-    "countries": [
-      "英国",
-      "United Kingdom"
-    ],
-    "fieldTerms": [
-      "国际贸易",
-      "国际商务",
-      "International Trade",
-      "International Business",
-      "Global Business",
-      "International Business Management",
-      "Commerce international",
-      "Management international"
-    ],
-    "discoveryQuery": "official programme: MSc International Business UK",
-    "discoveredAt": "2026-07-23T15:40:00.000Z",
-    "sourceType": "external_official_discovery",
-    "verificationStatus": "verified"
-  },
-  {
-    "institution": "University of Leeds",
-    "programme": "International Business MSc",
-    "officialUrl": "https://courses.leeds.ac.uk/e763/international-business-msc",
-    "countries": [
-      "英国",
-      "United Kingdom"
-    ],
-    "fieldTerms": [
-      "国际贸易",
-      "国际商务",
-      "International Trade",
-      "International Business",
-      "Global Business",
-      "International Business Management",
-      "Commerce international",
-      "Management international"
-    ],
-    "discoveryQuery": "official programme: International Business MSc UK",
-    "discoveredAt": "2026-07-23T15:40:00.000Z",
-    "sourceType": "external_official_discovery",
-    "verificationStatus": "verified"
-  },
-  {
-    "institution": "University of Birmingham",
-    "programme": "MSc International Business",
-    "officialUrl": "https://www.birmingham.ac.uk/study/postgraduate/subjects/business-and-management-courses/international-business-msc",
-    "countries": [
-      "英国",
-      "United Kingdom"
-    ],
-    "fieldTerms": [
-      "国际贸易",
-      "国际商务",
-      "International Trade",
-      "International Business",
-      "Global Business",
-      "International Business Management",
-      "Commerce international",
-      "Management international"
-    ],
-    "discoveryQuery": "official programme: MSc International Business UK",
-    "discoveredAt": "2026-07-23T15:40:00.000Z",
-    "sourceType": "external_official_discovery",
-    "verificationStatus": "verified"
-  },
-  {
-    "institution": "University of Warwick",
-    "programme": "International Business MSc",
-    "officialUrl": "https://warwick.ac.uk/study/postgraduate/courses/msc-international-business/",
-    "countries": [
-      "英国",
-      "United Kingdom"
-    ],
-    "fieldTerms": [
-      "国际贸易",
-      "国际商务",
-      "International Trade",
-      "International Business",
-      "Global Business",
-      "International Business Management",
-      "Commerce international",
-      "Management international"
-    ],
-    "discoveryQuery": "official programme: International Business MSc UK",
-    "discoveredAt": "2026-07-23T15:40:00.000Z",
-    "sourceType": "external_official_discovery",
-    "verificationStatus": "verified"
-  },
-  {
-    "institution": "EMLV Business School",
-    "programme": "MSc International Business",
-    "officialUrl": "https://www.emlv.fr/programmes/msc-international-business/",
-    "countries": [
-      "法国",
-      "France"
-    ],
-    "fieldTerms": [
-      "国际贸易",
-      "国际商务",
-      "International Trade",
-      "International Business",
-      "Global Business",
-      "International Business Management",
-      "Commerce international",
-      "Management international"
-    ],
-    "discoveryQuery": "official programme: MSc International Business France",
-    "discoveredAt": "2026-07-23T15:40:00.000Z",
-    "sourceType": "external_official_discovery",
-    "verificationStatus": "verified"
-  },
-  {
-    "institution": "EDC Paris Business School",
-    "programme": "Master of Science International Business",
-    "officialUrl": "https://www.edcparis.edu/fr/nos-programmes/master-international-business",
-    "countries": [
-      "法国",
-      "France"
-    ],
-    "fieldTerms": [
-      "国际贸易",
-      "国际商务",
-      "International Trade",
-      "International Business",
-      "Global Business",
-      "International Business Management",
-      "Commerce international",
-      "Management international"
-    ],
-    "discoveryQuery": "official programme: MSc International Business France",
-    "discoveredAt": "2026-07-23T15:40:00.000Z",
-    "sourceType": "external_official_discovery",
-    "verificationStatus": "verified"
   }
 ]
+

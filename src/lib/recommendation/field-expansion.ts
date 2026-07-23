@@ -9,13 +9,6 @@ const relations: Array<{ anchors: RegExp; terms: Array<[string,string,FieldRelat
     ["Cultural Entrepreneurship","en","highly_related"],["Management culturel","fr","synonym"],["Industries créatives et culturelles","fr","highly_related"],
   ],
 }, {
-  anchors: /国际贸易|国际商务|international trade|international business|global business/i,
-  terms: [
-    ["International Trade","en","synonym"],["International Business","en","highly_related"],["Global Business","en","highly_related"],
-    ["International Business Management","en","highly_related"],["Global Management","en","adjacent"],
-    ["Commerce international","fr","synonym"],["Management international","fr","highly_related"],
-  ],
-}, {
   anchors: /法学|法律|\blaw\b|llm|master of laws/i,
   terms: [
     ["Law","en","synonym"],["LLM","en","synonym"],["Master of Laws","en","synonym"],
