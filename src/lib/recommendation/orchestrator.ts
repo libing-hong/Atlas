@@ -10,6 +10,49 @@ import { retrieveCachedVerifiedProgrammes, searchCachedOfficialDiscoveries } fro
 import { aiRecommendationToCandidate, buildApplicantProfile, OpenAIRecommendationProvider, RECOMMENDATION_MODEL, RECOMMENDATION_PROMPT_VERSION, type AIRecommendationProvider } from "./ai-recommendation";
 
 const event = (stage: OrchestratorEvent["stage"], label: string, status: OrchestratorEvent["status"], detail?: string): OrchestratorEvent => ({ stage, label, status, detail });
+
+const DEFAULT_RECOMMENDATION_BUDGET_MS = 82_000;
+const MIN_STAGE_RESERVE_MS = 6_000;
+const remainingMs = (deadlineAt: number) => Math.max(0, deadlineAt - Date.now());
+
+async function withinBudget<T>(
+  label: string,
+  operation: () => Promise<T>,
+  deadlineAt: number,
+  stageLimitMs: number,
+  fallback: T,
+): Promise<T> {
+  const timeoutMs = Math.min(stageLimitMs, remainingMs(deadlineAt) - MIN_STAGE_RESERVE_MS);
+  if (timeoutMs <= 0) {
+    console.warn("[recommendation-budget]", { stage: label, outcome: "skipped", remainingMs: remainingMs(deadlineAt) });
+    return fallback;
+  }
+  return new Promise<T>((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      console.warn("[recommendation-budget]", { stage: label, outcome: "timed_out", timeoutMs, remainingMs: remainingMs(deadlineAt) });
+      resolve(fallback);
+    }, timeoutMs);
+    operation().then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        console.info("[recommendation-budget]", { stage: label, outcome: "completed", remainingMs: remainingMs(deadlineAt) });
+        resolve(value);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        console.warn("[recommendation-budget]", { stage: label, outcome: "failed", error: error instanceof Error ? error.message : String(error), remainingMs: remainingMs(deadlineAt) });
+        resolve(fallback);
+      },
+    );
+  });
+}
 export function normalizeRecommendationCountry(country: string) {
   const normalized = country.trim().toLowerCase().replaceAll(".", "");
   const aliases: Record<string, string> = {
@@ -29,17 +72,39 @@ function deduplicate(leads: ProgrammeLead[], reviewQueue: RejectedProgrammeLead[
   return unique;
 }
 
-async function verifyLeads(leads: ProgrammeLead[], profile: ReturnType<typeof understandProfile>, reviewQueue: RejectedProgrammeLead[]) {
-  const outcomes = await Promise.all(leads.map(lead => verifyProgrammeLead(lead, profile))); for (const outcome of outcomes) if (outcome.rejection) reviewQueue.push(outcome.rejection); return outcomes.flatMap(outcome => outcome.programme ? [outcome.programme] : []);
+async function verifyLeads(
+  leads: ProgrammeLead[],
+  profile: ReturnType<typeof understandProfile>,
+  reviewQueue: RejectedProgrammeLead[],
+  deadlineAt: number,
+  maxLeads = 12,
+) {
+  const selected = leads.slice(0, maxLeads);
+  const outcomes: Awaited<ReturnType<typeof verifyProgrammeLead>>[] = [];
+  for (let index = 0; index < selected.length && remainingMs(deadlineAt) > MIN_STAGE_RESERVE_MS; index += 4) {
+    const batch = selected.slice(index, index + 4);
+    const verified = await Promise.all(batch.map((lead) =>
+      withinBudget("official_verification", () => verifyProgrammeLead(lead, profile), deadlineAt, 7_000, null),
+    ));
+    outcomes.push(...verified.filter((outcome): outcome is Awaited<ReturnType<typeof verifyProgrammeLead>> => outcome !== null));
+  }
+  for (const outcome of outcomes) if (outcome.rejection) reviewQueue.push(outcome.rejection);
+  return outcomes.flatMap(outcome => outcome.programme ? [outcome.programme] : []);
 }
 
-export async function orchestrateRecommendations(input: { profile: StudentProfile; internalProgrammes?: SchoolRecommendation[]; plannedApplicationCount?: number; discoveryProvider?: ProgrammeDiscoveryProvider; aiProvider?: AIRecommendationProvider }): Promise<OrchestratorResult> {
+export async function orchestrateRecommendations(input: { profile: StudentProfile; internalProgrammes?: SchoolRecommendation[]; plannedApplicationCount?: number; discoveryProvider?: ProgrammeDiscoveryProvider; aiProvider?: AIRecommendationProvider; budgetMs?: number }): Promise<OrchestratorResult> {
+  const startedAt = Date.now();
+  const deadlineAt = startedAt + Math.min(input.budgetMs ?? DEFAULT_RECOMMENDATION_BUDGET_MS, DEFAULT_RECOMMENDATION_BUDGET_MS);
   const events: OrchestratorEvent[] = []; const reviewQueue: RejectedProgrammeLead[] = []; const profile = understandProfile(input.profile, input.plannedApplicationCount);
+  console.info("[recommendation-stage]", { stage: "start", budgetMs: deadlineAt - startedAt, plannedApplicationCount: profile.plannedApplicationCount });
   events.push(event("profile_understanding", "已理解学生背景", "completed", profile.educationCountry === "英国" ? "英国本科按国际/英国学历规则评估，不使用中国院校规则。" : undefined));
   const expansions = expandField(profile.targetField); events.push(event("field_expansion", "已完成专业语义扩展", "completed", `${expansions.length} 个多语言检索词`));
   const applicantProfile = buildApplicantProfile(input.profile, profile); const aiProvider = input.aiProvider ?? new OpenAIRecommendationProvider();
   events.push(event("programme_discovery", "Atlas 正在生成候选选校方案", "running"));
-  let aiRecommendations = await aiProvider.generate(applicantProfile); if (!aiRecommendations.length) aiRecommendations = await aiProvider.generate(applicantProfile, true);
+  let aiRecommendations = await withinBudget("ai_generation_primary", () => aiProvider.generate(applicantProfile), deadlineAt, 28_000, []);
+  if (!aiRecommendations.length && remainingMs(deadlineAt) > 42_000) {
+    aiRecommendations = await withinBudget("ai_generation_retry", () => aiProvider.generate(applicantProfile, true), deadlineAt, 12_000, []);
+  }
   aiRecommendations = aiRecommendations.map((item) => ({ ...item, country: normalizeRecommendationCountry(item.country) }));
   const allowedAI = aiRecommendations.filter(item => profile.targetCountries.includes(item.country) && item.degreeLevel === profile.targetDegreeLevel && item.schoolName.trim() && item.programName.trim());
   const aiCandidates = allowedAI.map(aiRecommendationToCandidate);
@@ -51,13 +116,18 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
   events.push(event("internal_search", "已检索内部数据库", "completed", `${internal.length} 条项目线索`));
   const niche = expansions.length >= 8; const coverageLow = internal.length / Math.max(profile.plannedApplicationCount, 1) < .75; const trigger = aiCandidates.length === 0 && (internal.length < profile.plannedApplicationCount || coverageLow || (niche && internal.length === 0));
   const provider = input.discoveryProvider ?? new OfficialWebDiscoveryProvider(); let discovered: ProgrammeLead[] = []; let passes = 0;
-  if (trigger) { events.push(event("programme_discovery", "正在检索相关项目", "running")); discovered = await provider.discover(profile, expansions, Math.max(profile.plannedApplicationCount * 4, 16)); passes++; events.push(event("programme_discovery", "已完成项目线索发现", "completed", `${discovered.length} 条线索；尚未面向用户展示`)); }
+  if (trigger && remainingMs(deadlineAt) > 20_000) {
+    events.push(event("programme_discovery", "正在检索相关项目", "running"));
+    discovered = await withinBudget("official_discovery_primary", () => provider.discover(profile, expansions, Math.min(Math.max(profile.plannedApplicationCount * 2, 12), 20)), deadlineAt, 12_000, []);
+    passes++;
+    events.push(event("programme_discovery", "已完成项目线索发现", "completed", `${discovered.length} 条线索；尚未面向用户展示`));
+  }
   let leads = deduplicate([...internal, ...discovered].filter(lead => relationAllowed(lead.fieldRelation, profile.crossDisciplinePreference)), reviewQueue);
-  events.push(event("entity_verification", "正在验证学校与项目实体", "running")); let verified = [...cachedVerified, ...await verifyLeads(leads.filter(lead => !cachedVerified.some(item => item.officialProgrammeUrl.replace(/\/$/, "") === lead.url.replace(/\/$/, ""))), profile, reviewQueue)]; events.push(event("official_verification", "已完成官方来源核验", "completed", `${verified.length} 个项目通过严格验证（含 ${cachedVerified.length} 个数据库记录），${reviewQueue.length} 条线索进入后台复核`));
+  events.push(event("entity_verification", "正在验证学校与项目实体", "running")); let verified = [...cachedVerified, ...await verifyLeads(leads.filter(lead => !cachedVerified.some(item => item.officialProgrammeUrl.replace(/\/$/, "") === lead.url.replace(/\/$/, ""))), profile, reviewQueue, deadlineAt)]; events.push(event("official_verification", "已完成官方来源核验", "completed", `${verified.length} 个项目通过严格验证（含 ${cachedVerified.length} 个数据库记录），${reviewQueue.length} 条线索进入后台复核`));
   let candidates = [...verified.map(programme => assessEligibility(profile, programme)), ...aiCandidates].filter(candidate => validateProgrammeForDisplay(candidate, profile));
-  if (aiCandidates.length === 0 && candidates.length < profile.plannedApplicationCount && passes < 2) {
+  if (aiCandidates.length === 0 && candidates.length < profile.plannedApplicationCount && passes < 2 && remainingMs(deadlineAt) > 24_000) {
     events.push(event("supervisor", "Supervisor 要求扩大官方检索", "running", "严格过滤后项目数量不足，绝不使用文章或商城页面补位"));
-    const more = await provider.discover(profile, expansions, Math.max(profile.plannedApplicationCount * 6, 24)); passes++; leads = deduplicate([...leads, ...more].filter(lead => relationAllowed(lead.fieldRelation, profile.crossDisciplinePreference)), reviewQueue); verified = [...cachedVerified, ...await verifyLeads(leads.filter(lead => !cachedVerified.some(item => item.officialProgrammeUrl.replace(/\/$/, "") === lead.url.replace(/\/$/, ""))), profile, reviewQueue)]; candidates = [...verified.map(programme => assessEligibility(profile, programme)), ...aiCandidates].filter(candidate => validateProgrammeForDisplay(candidate, profile));
+    const more = await withinBudget("official_discovery_secondary", () => provider.discover(profile, expansions, Math.min(Math.max(profile.plannedApplicationCount * 2, 12), 18)), deadlineAt, 8_000, []); passes++; leads = deduplicate([...leads, ...more].filter(lead => relationAllowed(lead.fieldRelation, profile.crossDisciplinePreference)), reviewQueue); verified = [...cachedVerified, ...await verifyLeads(leads.filter(lead => !cachedVerified.some(item => item.officialProgrammeUrl.replace(/\/$/, "") === lead.url.replace(/\/$/, ""))), profile, reviewQueue, deadlineAt, 8)]; candidates = [...verified.map(programme => assessEligibility(profile, programme)), ...aiCandidates].filter(candidate => validateProgrammeForDisplay(candidate, profile));
   }
   const finalSeen = new Set<string>(); candidates = candidates.filter(candidate => { const key = `${candidate.institutionName}|${candidate.programmeName}|${candidate.country}|${candidate.degreeLevel}`.toLowerCase(); if (finalSeen.has(key)) { reviewQueue.push({ lead: { url: candidate.officialProgrammeUrl, searchTitle: candidate.programmeName, snippet: null, entityType: "official_programme", fieldRelation: candidate.fieldRelation, discoveryQuery: "supervisor deduplication", discoveredAt: new Date().toISOString() }, reasons: ["DUPLICATE_RESULT"] }); return false; } finalSeen.add(key); return true; });
   candidates.sort((a, b) => a.recommendationBand === "currently_not_suitable" ? 1 : b.recommendationBand === "currently_not_suitable" ? -1 : b.score - a.score);
@@ -66,6 +136,7 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
   const atlasNames = new Set(cachedVerified.map(item => `${item.institutionName}|${item.programmeName}`.toLowerCase())); const atlasSchools = new Set(cachedVerified.map(item => item.institutionName.toLowerCase()));
   const debug = { initialCandidates, afterCountryFilter, afterDegreeFilter: cachedVerified.length, afterSubjectMatch: verified.length, afterEligibilityCheck: candidates.length, afterValidation: candidates.length, openAIRequestStarted:true, model:RECOMMENDATION_MODEL,promptVersion:RECOMMENDATION_PROMPT_VERSION,aiCandidatesReturned:aiRecommendations.length,atlasSchoolMatches:aiRecommendations.filter(item=>atlasSchools.has(item.schoolName.toLowerCase())).length,atlasProgramMatches:aiRecommendations.filter(item=>atlasNames.has(`${item.schoolName}|${item.programName}`.toLowerCase())).length,pendingVerification:candidates.filter(item=>item.generatedByAI).length,verifiedRecommendations:candidates.filter(item=>!item.generatedByAI).length,excluded:aiRecommendations.length-allowedAI.length };
   const emptyReason = candidates.length ? undefined : cachedVerified.length === 0 ? "当前数据库中没有覆盖该国家、学位层级和专业方向组合的已核验项目。" : "候选项目未通过官方来源与展示校验。";
+  console.info("[recommendation-stage]", { stage: "complete", durationMs: Date.now() - startedAt, remainingMs: remainingMs(deadlineAt), candidateCount: candidates.length, discoveryPasses: passes });
   return { profile, expansions, candidates, reviewQueue, fallbackLevel: candidates.length >= profile.plannedApplicationCount ? 1 : candidates.length ? 4 : 5, emptyReason, debug, events, supervisor: { sufficient: candidates.length >= profile.plannedApplicationCount, issues, discoveryPasses: passes } };
 }
 
