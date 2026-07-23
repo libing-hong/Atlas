@@ -39,11 +39,12 @@ function getOpenAIClient() {
 
 export function normalizeOpenAIError(error: unknown): SchoolRecommendationError {
   if (error instanceof SchoolRecommendationError) return error;
-  const value = error as { status?: number; code?: string };
+  const value = error as { status?: number; code?: string; type?: string; message?: string };
   if (value?.code === "insufficient_quota") return new SchoolRecommendationError("OPENAI_INSUFFICIENT_QUOTA");
   if (value?.status === 401) return new SchoolRecommendationError("OPENAI_AUTHENTICATION_FAILED");
   if (value?.status === 403) return new SchoolRecommendationError("OPENAI_PERMISSION_DENIED");
   if (value?.status === 429) return new SchoolRecommendationError("OPENAI_RATE_LIMITED");
+  console.warn("[openai-recommendation]", { status: value?.status, code: value?.code, type: value?.type, message: value?.message?.slice(0, 240) });
   return new SchoolRecommendationError("OPENAI_REQUEST_FAILED");
 }
 
@@ -72,7 +73,7 @@ export class OpenAIRecommendationProvider implements AIRecommendationProvider {
   async generate(profile: ApplicantProfile, relaxed = false) {
     const instructions = `You are Atlas's university programme planning engine. Return 6-8 real, specific university degree programmes suitable for the applicant. Only use countries in targetCountries. School and programme names must be separate. Never return books, articles, rankings, marketplaces, training courses, aggregators, or non-higher-education institutions. Do not require an Atlas database match. For every programme, include structured admission requirements for degree, grade, subject background, language, experience, prerequisites, and portfolio/special requirements, together with an applicant assessment. Use a programme's official admissions URL when known. Set requirement to null and status to unknown when a requirement cannot be established; never invent a threshold. Uncertain but plausible programmes may be returned with low confidence and verification queries. Expand subject semantics where useful.${relaxed ? " Use broader related subject names while preserving countries and degree level." : ""}`;
     try {
-      const response = await getOpenAIClient().responses.create({ model: RECOMMENDATION_MODEL, reasoning: { effort: "low" }, max_output_tokens: 6_000, instructions, input: JSON.stringify(profile), text: { format: { type: "json_schema", name: "atlas_programme_recommendations", strict: true, schema } } });
+      const response = await getOpenAIClient().responses.create({ model: RECOMMENDATION_MODEL, max_output_tokens: 6_000, instructions, input: JSON.stringify(profile), text: { format: { type: "json_schema", name: "atlas_programme_recommendations", strict: true, schema } } });
       if (!response.output_text) throw new SchoolRecommendationError("OPENAI_INVALID_RESPONSE");
       try {
         const recommendations = (JSON.parse(response.output_text) as { recommendations?: AIProgramRecommendation[] }).recommendations;
