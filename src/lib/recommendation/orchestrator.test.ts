@@ -115,3 +115,22 @@ test("recommendation orchestration returns cached results before the runtime bud
   assert.ok(result.candidates.length > 0);
   assert.ok(result.candidates.every((item) => item.country === "法国"));
 });
+
+
+test("international trade returns a complete cached portfolio without depending on AI", async () => {
+  const raw = normalizeStudentProfile({
+    targetCountries: ["英国", "法国"],
+    targetSubjects: ["国际贸易"],
+    targetDegreeLevel: "硕士",
+    languageTests: [{ type: "IELTS", overall: 7 }],
+  });
+  const result = await orchestrateRecommendations({
+    profile: raw,
+    plannedApplicationCount: 6,
+    aiProvider: { generate: async () => new Promise<never>(() => {}) },
+    budgetMs: 1,
+  });
+  assert.equal(result.candidates.length, 6);
+  assert.ok(result.candidates.every((item) => ["英国", "法国"].includes(item.country)));
+  assert.ok(result.candidates.every((item) => item.officialProgrammeUrl.startsWith("https://")));
+});
