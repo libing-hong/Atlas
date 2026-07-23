@@ -5,7 +5,7 @@ import { assessEligibility, validateProgrammeForDisplay } from "./eligibility";
 import { OfficialWebDiscoveryProvider, type ProgrammeDiscoveryProvider } from "./programme-discovery";
 import { understandProfile } from "./profile-understanding";
 import { verifyProgrammeLead } from "./official-verification";
-import type { OrchestratorEvent, OrchestratorResult, ProgrammeLead, RejectedProgrammeLead } from "./types";
+import type { OrchestratorEvent, OrchestratorResult, ProgrammeLead, RejectedProgrammeLead, VerifiedField, VerifiedProgramme } from "./types";
 import { retrieveCachedVerifiedProgrammes, searchCachedOfficialDiscoveries } from "./programme-repository";
 import { aiRecommendationToCandidate, buildApplicantProfile, OpenAIRecommendationProvider, RECOMMENDATION_MODEL, RECOMMENDATION_PROMPT_VERSION, type AIRecommendationProvider } from "./ai-recommendation";
 
