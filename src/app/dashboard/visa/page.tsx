@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle, ArrowRight, CalendarDays, Check, CheckCircle2, ChevronRight,
-  CircleDollarSign, Clock3, FileCheck2, FileText, Landmark, MapPin, ShieldAlert,
+  CircleDollarSign, Clock3, FileCheck2, FileText, Landmark, ShieldAlert,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { DashboardShell } from "@/components/PageShell";
