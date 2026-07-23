@@ -92,6 +92,59 @@ async function verifyLeads(
   return outcomes.flatMap(outcome => outcome.programme ? [outcome.programme] : []);
 }
 
+const provisionalField = <T>(value: T | null, url: string): VerifiedField<T> => ({
+  value,
+  sourceUrl: url,
+  retrievedAt: new Date().toISOString(),
+  verificationStatus: value === null ? "pending" : "partially_verified",
+});
+
+function provisionalProgrammeFromLead(lead: ProgrammeLead, profile: ReturnType<typeof understandProfile>): VerifiedProgramme | null {
+  if (lead.entityType !== "official_programme" || !profile.targetDegreeLevel) return null;
+  let parsed: URL;
+  try { parsed = new URL(lead.url); } catch { return null; }
+  const host = parsed.hostname.toLowerCase();
+  const query = `${lead.discoveryQuery} ${lead.searchTitle}`.toLowerCase();
+  const country = host.endsWith(".ac.uk") || query.includes("united kingdom") || query.includes(" uk ")
+    ? "英国"
+    : host.endsWith(".fr") || query.includes("france")
+      ? "法国"
+      : host.endsWith(".edu.au") || query.includes("australia")
+        ? "澳洲"
+        : profile.targetCountries.length === 1 ? profile.targetCountries[0] : null;
+  if (!country || !profile.targetCountries.includes(country)) return null;
+  const parts = lead.searchTitle.split(/\s+[|–—]\s+/).map((part) => part.trim()).filter(Boolean);
+  const programmeName = parts.find((part) => /master|msc|ma\b|llm|mba|bachelor|phd|international|business|management/i.test(part)) ?? parts[0];
+  const institutionName = parts.find((part) => /university|universit[eé]|school|college|école|institute/i.test(part))
+    ?? parsed.hostname.replace(/^www\./, "").split(".")[0].replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  if (!programmeName || !institutionName) return null;
+  return {
+    institutionName,
+    programmeName,
+    country,
+    officialProgrammeUrl: lead.url,
+    officialRootDomain: parsed.hostname.replace(/^www\./, ""),
+    degreeType: profile.targetDegreeLevel,
+    degreeLevel: profile.targetDegreeLevel,
+    campus: provisionalField<string>(null, lead.url),
+    fieldRelation: lead.fieldRelation,
+    sourceType: "official",
+    active: provisionalField(true, lead.url),
+    intake: provisionalField<string>(null, lead.url),
+    teachingLanguage: provisionalField<string>(null, lead.url),
+    degreeRequirement: provisionalField<string>(null, lead.url),
+    subjectRequirement: provisionalField<string>(null, lead.url),
+    gradeRequirement: provisionalField<string>(null, lead.url),
+    languageRequirement: provisionalField<string>(null, lead.url),
+    tuition: provisionalField<number>(null, lead.url),
+    tuitionCurrency: provisionalField<string>(null, lead.url),
+    deadline: provisionalField<string>(null, lead.url),
+    applicationUrl: provisionalField<string>(null, lead.url),
+    discoveryQuery: lead.discoveryQuery,
+    discoveredAt: lead.discoveredAt,
+  };
+}
+
 export async function orchestrateRecommendations(input: { profile: StudentProfile; internalProgrammes?: SchoolRecommendation[]; plannedApplicationCount?: number; discoveryProvider?: ProgrammeDiscoveryProvider; aiProvider?: AIRecommendationProvider; budgetMs?: number }): Promise<OrchestratorResult> {
   const startedAt = Date.now();
   const deadlineAt = startedAt + Math.min(input.budgetMs ?? DEFAULT_RECOMMENDATION_BUDGET_MS, DEFAULT_RECOMMENDATION_BUDGET_MS);
@@ -125,6 +178,18 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
   let leads = deduplicate([...internal, ...discovered].filter(lead => relationAllowed(lead.fieldRelation, profile.crossDisciplinePreference)), reviewQueue);
   events.push(event("entity_verification", "正在验证学校与项目实体", "running")); let verified = [...cachedVerified, ...await verifyLeads(leads.filter(lead => !cachedVerified.some(item => item.officialProgrammeUrl.replace(/\/$/, "") === lead.url.replace(/\/$/, ""))), profile, reviewQueue, deadlineAt)]; events.push(event("official_verification", "已完成官方来源核验", "completed", `${verified.length} 个项目通过严格验证（含 ${cachedVerified.length} 个数据库记录），${reviewQueue.length} 条线索进入后台复核`));
   let candidates = [...verified.map(programme => assessEligibility(profile, programme)), ...aiCandidates].filter(candidate => validateProgrammeForDisplay(candidate, profile));
+  if (!candidates.length) {
+    const provisional = deduplicate([...internal, ...discovered], reviewQueue)
+      .map((lead) => provisionalProgrammeFromLead(lead, profile))
+      .filter((programme): programme is VerifiedProgramme => programme !== null)
+      .slice(0, profile.plannedApplicationCount)
+      .map((programme) => assessEligibility(profile, programme))
+      .filter((candidate) => validateProgrammeForDisplay(candidate, profile));
+    if (provisional.length) {
+      candidates = provisional;
+      events.push(event("supervisor", "已返回待进一步核验的官方项目", "completed", `${provisional.length} 个项目`));
+    }
+  }
   if (aiCandidates.length === 0 && candidates.length < profile.plannedApplicationCount && passes < 2 && remainingMs(deadlineAt) > 24_000) {
     events.push(event("supervisor", "Supervisor 要求扩大官方检索", "running", "严格过滤后项目数量不足，绝不使用文章或商城页面补位"));
     const more = await withinBudget("official_discovery_secondary", () => provider.discover(profile, expansions, Math.min(Math.max(profile.plannedApplicationCount * 2, 12), 18)), deadlineAt, 8_000, []); passes++; leads = deduplicate([...leads, ...more].filter(lead => relationAllowed(lead.fieldRelation, profile.crossDisciplinePreference)), reviewQueue); verified = [...cachedVerified, ...await verifyLeads(leads.filter(lead => !cachedVerified.some(item => item.officialProgrammeUrl.replace(/\/$/, "") === lead.url.replace(/\/$/, ""))), profile, reviewQueue, deadlineAt, 8)]; candidates = [...verified.map(programme => assessEligibility(profile, programme)), ...aiCandidates].filter(candidate => validateProgrammeForDisplay(candidate, profile));
