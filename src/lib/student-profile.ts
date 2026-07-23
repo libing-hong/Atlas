@@ -84,6 +84,14 @@ function nullableString(value: unknown): string | null {
 function nullableNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
+function normalizeTargetDegreeLevel(value: unknown): StudentProfile["targetDegreeLevel"] {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "本科" || normalized === "bachelor" || normalized === "bachelors" || normalized === "undergraduate") return "本科";
+  if (normalized === "硕士" || normalized === "master" || normalized === "masters" || normalized === "postgraduate") return "硕士";
+  if (normalized === "博士" || normalized === "doctorate" || normalized === "doctoral" || normalized === "phd") return "博士";
+  return null;
+}
 function normalizeLanguageTest(value: Partial<LanguageTest> & { type?: string }, index: number): LanguageTest | null {
   const all = [...ENGLISH_TESTS, ...FRENCH_TESTS] as readonly string[];
   const legacyType = value.type as string | undefined;
@@ -110,7 +118,7 @@ export function normalizeStudentProfile(raw: Record<string, unknown> | null | un
     internships: Array.isArray(raw.internships) ? raw.internships as WorkExperience[] : [],
     targetCountries: Array.isArray(raw.targetCountries) ? raw.targetCountries.filter((x): x is string => typeof x === "string") : [],
     targetSubjects: Array.isArray(raw.targetSubjects) ? raw.targetSubjects.filter((x): x is string => typeof x === "string") : [],
-    targetDegreeLevel: raw.targetDegreeLevel === "本科" || raw.targetDegreeLevel === "硕士" || raw.targetDegreeLevel === "博士" ? raw.targetDegreeLevel : null,
+    targetDegreeLevel: normalizeTargetDegreeLevel(raw.targetDegreeLevel ?? raw.targetDegree),
     targetIntake: { year: nullableNumber(intake?.year), term: intake?.term === "spring" || intake?.term === "summer" || intake?.term === "fall" ? intake.term : null },
     maxAnnualTuition: nullableNumber(raw.maxAnnualTuition ?? raw.budgetMax), tuitionCurrency: nullableString(raw.tuitionCurrency) ?? (raw.budgetMax ? "GBP" : null),
     preferredCities: Array.isArray(raw.preferredCities) ? raw.preferredCities.filter((x): x is string => typeof x === "string") : [],

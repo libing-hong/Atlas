@@ -3,7 +3,7 @@ import type { StudentProfile } from "../student-profile";
 import type { ProgrammeCandidate, UnderstoodProfile, VerifiedField, VerifiedProgramme } from "./types";
 
 export const RECOMMENDATION_PROMPT_VERSION = "atlas-school-plan-v2";
-export const RECOMMENDATION_MODEL = process.env.OPENAI_RECOMMENDATION_MODEL ?? "gpt-5-mini";
+export const RECOMMENDATION_MODEL = process.env.OPENAI_RECOMMENDATION_MODEL ?? "gpt-4.1-mini";
 
 export type ApplicantProfile = {
   currentDegree?: string; currentInstitution?: string; institutionCountry?: string; currentMajor?: string;
@@ -34,16 +34,17 @@ export class SchoolRecommendationError extends Error {
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new SchoolRecommendationError("OPENAI_API_KEY_MISSING");
-  return new OpenAI({ apiKey, timeout: 105_000, maxRetries: 1 });
+  return new OpenAI({ apiKey, timeout: 24_000, maxRetries: 0 });
 }
 
 export function normalizeOpenAIError(error: unknown): SchoolRecommendationError {
   if (error instanceof SchoolRecommendationError) return error;
-  const value = error as { status?: number; code?: string };
+  const value = error as { status?: number; code?: string; type?: string; message?: string };
   if (value?.code === "insufficient_quota") return new SchoolRecommendationError("OPENAI_INSUFFICIENT_QUOTA");
   if (value?.status === 401) return new SchoolRecommendationError("OPENAI_AUTHENTICATION_FAILED");
   if (value?.status === 403) return new SchoolRecommendationError("OPENAI_PERMISSION_DENIED");
   if (value?.status === 429) return new SchoolRecommendationError("OPENAI_RATE_LIMITED");
+  console.warn("[openai-recommendation]", { status: value?.status, code: value?.code, type: value?.type, message: value?.message?.slice(0, 240) });
   return new SchoolRecommendationError("OPENAI_REQUEST_FAILED");
 }
 
@@ -66,13 +67,13 @@ export function buildApplicantProfile(raw: StudentProfile, profile: UnderstoodPr
   };
 }
 
-const schema = { type: "object", additionalProperties: false, required: ["recommendations"], properties: { recommendations: { type: "array", minItems: 8, maxItems: 20, items: { type: "object", additionalProperties: false, required: ["schoolName","schoolNameLocal","programName","programNameLocal","country","city","degreeLevel","subjectArea","category","estimatedFitScore","recommendationReasons","applicantStrengths","admissionConcerns","admissionRequirements","missingRequirements","verificationQueries","expectedOfficialDomain","possibleOfficialUrl","confidence"], properties: { schoolName:{type:"string"},schoolNameLocal:{type:["string","null"]},programName:{type:"string"},programNameLocal:{type:["string","null"]},country:{type:"string"},city:{type:["string","null"]},degreeLevel:{type:"string",enum:["bachelor","master","doctorate"]},subjectArea:{type:"string"},category:{type:"string",enum:["reach","target","safer","exploratory"]},estimatedFitScore:{type:"number",minimum:0,maximum:100},recommendationReasons:{type:"array",items:{type:"string"}},applicantStrengths:{type:"array",items:{type:"string"}},admissionConcerns:{type:"array",items:{type:"string"}},admissionRequirements:{type:"array",minItems:7,maxItems:7,items:{type:"object",additionalProperties:false,required:["category","requirement","applicantAssessment","status","sourceUrl"],properties:{category:{type:"string",enum:["degree","grade","subject","language","experience","prerequisite","portfolio"]},requirement:{type:["string","null"]},applicantAssessment:{type:"string"},status:{type:"string",enum:["meets","mostly_meets","needs_confirmation","gap_detected","unknown"]},sourceUrl:{type:["string","null"]}}}},missingRequirements:{type:"array",items:{type:"string"}},verificationQueries:{type:"array",items:{type:"string"}},expectedOfficialDomain:{type:["string","null"]},possibleOfficialUrl:{type:["string","null"]},confidence:{type:"number",minimum:0,maximum:1} } } } } } as const;
+const schema = { type: "object", additionalProperties: false, required: ["recommendations"], properties: { recommendations: { type: "array", minItems: 6, maxItems: 8, items: { type: "object", additionalProperties: false, required: ["schoolName","schoolNameLocal","programName","programNameLocal","country","city","degreeLevel","subjectArea","category","estimatedFitScore","recommendationReasons","applicantStrengths","admissionConcerns","admissionRequirements","missingRequirements","verificationQueries","expectedOfficialDomain","possibleOfficialUrl","confidence"], properties: { schoolName:{type:"string"},schoolNameLocal:{type:["string","null"]},programName:{type:"string"},programNameLocal:{type:["string","null"]},country:{type:"string"},city:{type:["string","null"]},degreeLevel:{type:"string",enum:["bachelor","master","doctorate"]},subjectArea:{type:"string"},category:{type:"string",enum:["reach","target","safer","exploratory"]},estimatedFitScore:{type:"number",minimum:0,maximum:100},recommendationReasons:{type:"array",items:{type:"string"}},applicantStrengths:{type:"array",items:{type:"string"}},admissionConcerns:{type:"array",items:{type:"string"}},admissionRequirements:{type:"array",minItems:7,maxItems:7,items:{type:"object",additionalProperties:false,required:["category","requirement","applicantAssessment","status","sourceUrl"],properties:{category:{type:"string",enum:["degree","grade","subject","language","experience","prerequisite","portfolio"]},requirement:{type:["string","null"]},applicantAssessment:{type:"string"},status:{type:"string",enum:["meets","mostly_meets","needs_confirmation","gap_detected","unknown"]},sourceUrl:{type:["string","null"]}}}},missingRequirements:{type:"array",items:{type:"string"}},verificationQueries:{type:"array",items:{type:"string"}},expectedOfficialDomain:{type:["string","null"]},possibleOfficialUrl:{type:["string","null"]},confidence:{type:"number",minimum:0,maximum:1} } } } } } as const;
 
 export class OpenAIRecommendationProvider implements AIRecommendationProvider {
   async generate(profile: ApplicantProfile, relaxed = false) {
-    const instructions = `You are Atlas's university programme planning engine. Return 10-20 real, specific university degree programmes suitable for the applicant. Only use countries in targetCountries. School and programme names must be separate. Never return books, articles, rankings, marketplaces, training courses, aggregators, or non-higher-education institutions. Do not require an Atlas database match. For every programme, include structured admission requirements for degree, grade, subject background, language, experience, prerequisites, and portfolio/special requirements, together with an applicant assessment. Use a programme's official admissions URL when known. Set requirement to null and status to unknown when a requirement cannot be established; never invent a threshold. Uncertain but plausible programmes may be returned with low confidence and verification queries. Expand subject semantics where useful.${relaxed ? " Use broader related subject names while preserving countries and degree level." : ""}`;
+    const instructions = `You are Atlas's university programme planning engine. Return 6-8 real, specific university degree programmes suitable for the applicant. Only use countries in targetCountries. School and programme names must be separate. Never return books, articles, rankings, marketplaces, training courses, aggregators, or non-higher-education institutions. Do not require an Atlas database match. For every programme, include structured admission requirements for degree, grade, subject background, language, experience, prerequisites, and portfolio/special requirements, together with an applicant assessment. Use a programme's official admissions URL when known. Set requirement to null and status to unknown when a requirement cannot be established; never invent a threshold. Uncertain but plausible programmes may be returned with low confidence and verification queries. Expand subject semantics where useful.${relaxed ? " Use broader related subject names while preserving countries and degree level." : ""}`;
     try {
-      const response = await getOpenAIClient().responses.create({ model: RECOMMENDATION_MODEL, reasoning: { effort: "low" }, max_output_tokens: 12_000, instructions, input: JSON.stringify(profile), text: { format: { type: "json_schema", name: "atlas_programme_recommendations", strict: true, schema } } });
+      const response = await getOpenAIClient().responses.create({ model: RECOMMENDATION_MODEL, max_output_tokens: 6_000, instructions, input: JSON.stringify(profile), text: { format: { type: "json_schema", name: "atlas_programme_recommendations", strict: true, schema } } });
       if (!response.output_text) throw new SchoolRecommendationError("OPENAI_INVALID_RESPONSE");
       try {
         const recommendations = (JSON.parse(response.output_text) as { recommendations?: AIProgramRecommendation[] }).recommendations;

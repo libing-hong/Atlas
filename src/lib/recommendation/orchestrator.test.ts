@@ -7,7 +7,7 @@ import { retrieveCachedVerifiedProgrammes } from "./programme-repository";
 import { understandProfile } from "./profile-understanding";
 import { normalizeStudentProfile } from "../student-profile";
 import { aiRecommendationToCandidate, buildApplicantProfile, normalizeOpenAIError, SchoolRecommendationError, type AIProgramRecommendation } from "./ai-recommendation";
-import { normalizeRecommendationCountry } from "./orchestrator";
+import { normalizeRecommendationCountry, orchestrateRecommendations } from "./orchestrator";
 import type { ProgrammeCandidate, UnderstoodProfile, VerifiedProgramme } from "./types";
 
 const verifiedProgramme: VerifiedProgramme = {
@@ -92,3 +92,45 @@ test("OpenAI errors remain distinguishable without exposing credentials", () => 
   assert.equal(normalizeOpenAIError(new SchoolRecommendationError("OPENAI_INVALID_RESPONSE")).code, "OPENAI_INVALID_RESPONSE");
 });
 
+
+
+test("recommendation orchestration returns cached results before the runtime budget expires", async () => {
+  const raw = normalizeStudentProfile({
+    targetCountries: ["法国"],
+    targetSubjects: ["法学"],
+    targetDegreeLevel: "硕士",
+    languageTests: [],
+  });
+  const hangingAI = {
+    generate: async () => new Promise<never>(() => {}),
+  };
+  const startedAt = Date.now();
+  const result = await orchestrateRecommendations({
+    profile: raw,
+    plannedApplicationCount: 6,
+    aiProvider: hangingAI,
+    budgetMs: 1,
+  });
+  assert.ok(Date.now() - startedAt < 500);
+  assert.ok(result.candidates.length > 0);
+  assert.ok(result.candidates.every((item) => item.country === "法国"));
+});
+
+
+test("international trade returns a complete cached portfolio without depending on AI", async () => {
+  const raw = normalizeStudentProfile({
+    targetCountries: ["英国", "法国"],
+    targetSubjects: ["国际贸易"],
+    targetDegreeLevel: "硕士",
+    languageTests: [{ type: "IELTS", overall: 7 }],
+  });
+  const result = await orchestrateRecommendations({
+    profile: raw,
+    plannedApplicationCount: 6,
+    aiProvider: { generate: async () => new Promise<never>(() => {}) },
+    budgetMs: 1,
+  });
+  assert.equal(result.candidates.length, 6);
+  assert.ok(result.candidates.every((item) => ["英国", "法国"].includes(item.country)));
+  assert.ok(result.candidates.every((item) => item.officialProgrammeUrl.startsWith("https://")));
+});
