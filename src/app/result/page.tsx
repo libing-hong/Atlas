@@ -11,6 +11,7 @@ import { buildProgramPortfolio } from "@/lib/program-matching";
 import { buildPlanningReport, PlanningReport } from "@/lib/planning-report";
 import { readActivePlanningRun, readPlanningRun, readRecommendationCandidates, writePlanningReport, writeRecommendationCandidates } from "@/lib/planning-store";
 import type { ProgrammeCandidate } from "@/lib/recommendation/types";
+import { postRecommendationWithRetry } from "@/lib/recommendation-request";
 
 export default function ResultPage() {
   const [status, setStatus] = useState<"loading" | "ready" | "missing" | "error">("loading");
@@ -40,13 +41,11 @@ export default function ResultPage() {
           setRecommendationStatus("ready");
           return;
         }
-        const response = await fetch("/api/recommendations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Idempotency-Key": run.id },
+        const { response, data } = await postRecommendationWithRetry({
           body: JSON.stringify({ profile: run.profile, plannedApplicationCount: 6 }),
+          idempotencyKey: run.id,
           signal: controller.signal,
         });
-        const data = await response.json() as { candidates?: ProgrammeCandidate[]; emptyReason?: string; generationStatus?: "complete" | "partial" | "empty"; aiStatus?: "completed" | "unavailable"; message?: string; code?: string };
         if (!response.ok) throw new Error(data.message ?? "推荐生成失败，请稍后重试");
         if (!Array.isArray(data.candidates) || !["complete", "partial", "empty"].includes(data.generationStatus ?? "") || !["completed", "unavailable"].includes(data.aiStatus ?? "")) {
           throw new Error("RECOMMENDATION_RESPONSE_CONTRACT_INVALID");
@@ -54,7 +53,7 @@ export default function ResultPage() {
         if (data.candidates.some((candidate) => !candidate.institutionName || !candidate.programmeName || !candidate.country || !candidate.degreeLevel || !candidate.officialProgrammeUrl)) {
           throw new Error("RECOMMENDATION_RESPONSE_CONTRACT_INVALID");
         }
-        const candidates = data.candidates ?? [];
+        const candidates = data.candidates as ProgrammeCandidate[];
         setRecommendationMessage(data.emptyReason ?? (data.generationStatus === "partial" ? "部分结果仍在核验，请稍后重试以获取更多项目。" : ""));
         console.info("[school-recommendation-result]", {
           apiCandidateCount: candidates.length,
