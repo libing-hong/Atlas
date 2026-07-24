@@ -27,7 +27,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
   const uploadsEnabled = process.env.NEXT_PUBLIC_SENSITIVE_UPLOADS_ENABLED === "true" && Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
   const record = useMemo<ApplicationRecord>(() => readApplicationRecords().find((item) => item.id === applicationId) ?? {
     id: applicationId, planningRunId: readActivePlanningRun()?.id ?? "legacy", schoolRecommendationId: school.id, universityName: school.universityName, programName: school.programName,
-    country: school.country, intake: school.intake, status: "materials_in_progress", detectedMaterialCount: school.materialsReady, preparedMaterials: school.materialsReady,
+    country: school.country, intake: school.intake, status: "preparing_materials", detectedMaterialCount: school.materialsReady, preparedMaterials: school.materialsReady,
     totalMaterials: school.materialsTotal, missingMaterials: [], applicationProgress: Math.round((school.materialsReady / school.materialsTotal) * 45), nextAction: "准备申请材料", serviceType: "none",
   }, [applicationId, school]);
   const requirements = useMemo(() => getAdmissionRequirements(school), [school]);
@@ -88,7 +88,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
       preparedMaterials: detectedMaterialCount,
       missingMaterials,
       applicationProgress: readyToApply ? 78 : Math.max(20, Math.round((detectedMaterialCount / Math.max(baseMaterials.length, 1)) * 70)),
-      status: readyToApply ? "ready_to_apply" : "materials_in_progress",
+      status: readyToApply ? "ready_to_submit" : "preparing_materials",
       nextAction: readyToApply ? "核对申请信息并提交申请" : `补充 ${missingMaterials[0] ?? "申请材料"}`,
     });
   }
@@ -127,7 +127,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
       preparedMaterials: detectedMaterialCount,
       missingMaterials: unreadyMaterials.map((material) => material.name),
       applicationProgress: applicationReady ? 78 : Math.max(20, Math.round((detectedMaterialCount / Math.max(baseMaterials.length, 1)) * 70)),
-      status: applicationReady ? "ready_to_apply" : "materials_in_progress",
+      status: applicationReady ? "ready_to_submit" : "preparing_materials",
       nextAction: applicationReady ? "选择申请方式并前往官方申请系统" : pending.length ? `确认 ${pending[0].label}` : `补充 ${unreadyMaterials[0]?.name ?? "申请材料"}`,
     });
   }, [applicationId, applicationReady, baseMaterials, pending, unreadyMaterials]);
