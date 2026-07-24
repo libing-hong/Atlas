@@ -19,7 +19,14 @@ export function writeVisaWorkspaces(items: VisaWorkspace[]) {
 
 export function confirmFinalOffer(application: ApplicationRecord, allApplications: ApplicationRecord[]) {
   if (!application.offerEvidenceAvailable || application.offerConditionsSatisfied !== true) return null;
-  for (const item of allApplications) updateApplicationRecord(item.id, { isFinalOffer: item.id === application.id });
+  for (const item of allApplications) updateApplicationRecord(item.id, {
+    isFinalOffer: item.id === application.id,
+    ...(item.id === application.id ? {
+      status: "accepted" as const,
+      applicationProgress: 100,
+      nextAction: `准备${application.country}学生签证材料`,
+    } : {}),
+  });
   const now = new Date().toISOString();
   const previous = readVisaWorkspaces();
   const archived = archivePreviousVisaWorkspaces(previous, application.id, application.universityName, now);
@@ -45,3 +52,4 @@ export function subscribeVisaWorkspaces(listener: () => void) {
   window.addEventListener(eventName, listener); window.addEventListener("storage", listener);
   return () => { window.removeEventListener(eventName, listener); window.removeEventListener("storage", listener); };
 }
+

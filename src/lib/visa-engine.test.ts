@@ -10,6 +10,8 @@ const application = (country: string, changes: Partial<ApplicationRecord> = {}):
   missingMaterials: [], applicationProgress: 100, nextAction: "Visa", serviceType: "none",
   decisionStatus: "offer_received", offerEvidenceAvailable: true, offerConditionsSatisfied: true, isFinalOffer: true,
   ...changes,
+  submissionMode: changes.submissionMode ?? "unselected",
+  updatedAt: changes.updatedAt ?? "2026-07-24T00:00:00.000Z",
 });
 const completeFacts: VisaApplicantFacts = {
   ...emptyVisaFacts, nationality: "China", residenceCountry: "China", age: 23, courseStartDate: "2026-09-15",

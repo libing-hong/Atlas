@@ -14,11 +14,12 @@
     "test:planning": "tsx --test src/lib/planning-report.test.ts",
     "test:recommendation": "tsx --test src/lib/recommendation/*.test.ts src/lib/recommendation-request.test.ts src/app/api/recommendations/*.test.ts",
     "test:materials": "tsx --test src/lib/material-recognition.test.ts",
+    "test:application": "tsx --test src/lib/application-journey.test.ts",
     "test:visa": "tsx --test src/lib/visa-rules.test.ts src/lib/visa-engine.test.ts",
     "test:security": "tsx --test src/lib/server/api-security.test.ts",
     "test:scope": "node --test scripts/protected-scope.test.mjs",
     "test:smoke": "node scripts/run-smoke-test.mjs",
-    "test:all": "npm run test:planning && npm run test:recommendation && npm run test:materials && npm run test:visa && npm run test:security && npm run test:scope && npm run test:smoke",
+    "test:all": "npm run test:planning && npm run test:recommendation && npm run test:materials && npm run test:application && npm run test:visa && npm run test:security && npm run test:scope && npm run test:smoke",
     "test:ci": "npm run validate:files && npm run lint && npm run typecheck && npm run test:all && next build",
     "test:e2e": "node scripts/run-playwright.mjs"
   },
