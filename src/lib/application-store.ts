@@ -1,6 +1,7 @@
 import { ApplicationMaterial, ApplicationRecord, SchoolRecommendation, commonMaterials, createApplicationRecord } from "./application-prototype-data";
 import { PurchasedService, servicePricing } from "./service-pricing";
 import { emitPlanningStateChange, readActivePlanningRunId, readRunSelection, updatePlanningRun, writeRunSelection } from "./planning-store";
+import { inferSubmissionMode } from "./application-journey";
 
 const recordsKey = "atlas.application.records.v1";
 const workspaceKey = "atlas.application.workspace.v1";
@@ -133,6 +134,7 @@ export function readApplicationRecords(planningRunId?: string): ApplicationRecor
   if (typeof window === "undefined") return [];
   try {
     const records = JSON.parse(window.localStorage.getItem(recordsKey) ?? "[]") as Array<Omit<ApplicationRecord, "status"> & { status: string }>;
+    const legacyMode = window.localStorage.getItem(applicationModeKey);
     const normalized = records.map((record) => {
       const legacyEmpty = !record.totalMaterials;
       const totalMaterials = legacyEmpty ? commonMaterials.length : record.totalMaterials;
@@ -151,6 +153,8 @@ export function readApplicationRecords(planningRunId?: string): ApplicationRecor
         missingMaterials: legacyEmpty ? commonMaterials.map((item) => item.name) : record.missingMaterials,
         applicationProgress: legacyEmpty ? 0 : record.applicationProgress ?? Math.round((preparedMaterials / Math.max(totalMaterials, 1)) * 45),
         status: legacyStatus,
+        submissionMode: inferSubmissionMode(record as ApplicationRecord, legacyMode),
+        updatedAt: record.updatedAt ?? new Date().toISOString(),
         decisionStatus: record.decisionStatus ?? (["conditional_offer", "unconditional_offer", "accepted"].includes(legacyStatus) ? "offer_received" as const : "waiting_result" as const),
       } as ApplicationRecord;
     });
@@ -170,6 +174,7 @@ export function updateApplicationRecord(applicationId: string, changes: Partial<
   const next = records.map((record) => record.id === applicationId ? {
     ...record,
     ...changes,
+    updatedAt: changes.updatedAt ?? new Date().toISOString(),
     detectedMaterialCount: changes.detectedMaterialCount ?? changes.preparedMaterials ?? record.detectedMaterialCount ?? record.preparedMaterials,
   } : record);
   writeApplicationRecords(next);
