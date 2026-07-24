@@ -57,6 +57,13 @@ test("France and UK international business has verified launch coverage", () => 
   assert.ok(results.every(item => value.targetCountries.includes(item.country)));
 });
 
+test("France international trade returns a verified official programme", () => {
+  const value = understood(["法国"], "国际贸易");
+  const results = retrieveCachedVerifiedProgrammes(value, expandField(value.targetField));
+  assert.ok(results.some(item => item.programmeName === "MSc International Trade & Maritime Logistics"));
+  assert.ok(results.every(item => item.country === "法国"));
+});
+
 test("missing language scores do not remove cached programmes", () => {
   const value = understood(["英国"], "法学");
   assert.ok(retrieveCachedVerifiedProgrammes(value, expandField(value.targetField)).length > 0);
@@ -96,6 +103,26 @@ test("AI cannot label an unrelated programme as a matching subject", async () =>
   };
   const result = await orchestrateRecommendations({ profile: raw, aiProvider: { generate: async () => [unrelated] }, discoveryProvider: { discover: async () => [] } });
   assert.equal(result.candidates.some(item => item.programmeName.includes("Classics")), false);
+});
+
+test("semantic assessment supports arbitrary user subjects without a fixed taxonomy", async () => {
+  const raw = normalizeStudentProfile({ targetCountries: ["英国"], targetSubjects: ["Computational Neuroscience"], targetDegreeLevel: "硕士" });
+  const programme: AIProgramRecommendation = {
+    schoolName: "Example University", schoolNameLocal: null, programName: "MSc Neural Computation", programNameLocal: null,
+    country: "UK", city: null, degreeLevel: "master", subjectArea: "Computational Neuroscience", category: "target", estimatedFitScore: 80,
+    recommendationReasons: ["Closely related programme"], applicantStrengths: [], admissionConcerns: [], admissionRequirements: [], missingRequirements: [],
+    verificationQueries: [], expectedOfficialDomain: "example.ac.uk", possibleOfficialUrl: null, confidence: .8,
+  };
+  const result = await orchestrateRecommendations({
+    profile: raw,
+    aiProvider: {
+      generate: async () => [programme],
+      assessSubjectRelevance: async () => [{ index: 0, relevant: true, relation: "highly_related", reason: "Direct semantic match" }],
+    },
+    discoveryProvider: { discover: async () => [] },
+  });
+  assert.equal(result.debug.pendingVerification, 1);
+  assert.ok(result.reviewQueue.some(item => item.lead.searchTitle.includes("Neural Computation")));
 });
 
 test("applicant profile sends facts Atlas already knows without inventing missing scores", () => {

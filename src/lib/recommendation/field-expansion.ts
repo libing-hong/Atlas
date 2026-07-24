@@ -1,4 +1,3 @@
-
 import type { FieldExpansion, FieldRelation } from "./types";
 
 const relations: Array<{ anchors: RegExp; terms: Array<[string,string,FieldRelation]> }> = [{
@@ -17,6 +16,14 @@ const relations: Array<{ anchors: RegExp; terms: Array<[string,string,FieldRelat
     ["European Law","en","highly_related"],["Human Rights Law","en","highly_related"],["Droit","fr","synonym"],
     ["Droit international","fr","highly_related"],["Droit des affaires","fr","highly_related"],
   ],
+}, {
+  anchors: /国际贸易|international trade|commerce international/i,
+  terms: [
+    ["International Trade","en","synonym"],["Global Trade","en","synonym"],
+    ["International Trade and Logistics","en","highly_related"],["International Trade & Logistics","en","highly_related"],
+    ["International Trade and Maritime Logistics","en","highly_related"],["International Trade & Maritime Logistics","en","highly_related"],
+    ["Commerce international","fr","synonym"],["Commerce extérieur","fr","highly_related"],
+  ],
 }];
 
 export function expandField(targetField: string | null): FieldExpansion[] {
@@ -32,3 +39,4 @@ export function relationAllowed(relation: FieldRelation, preference: "related_on
   if (preference === "adjacent") return relation !== "cross_discipline";
   return relation === "synonym" || relation === "highly_related";
 }
+
