@@ -1,8 +1,11 @@
+Exit code: 0
+Wall time: 1.1 seconds
+Output:
 import type { SchoolRecommendation } from "../application-prototype-data";
 import type { StudentProfile } from "../student-profile";
 import { expandField, relationAllowed } from "./field-expansion";
 import { assessEligibility, validateProgrammeForDisplay } from "./eligibility";
-import { OfficialWebDiscoveryProvider, type ProgrammeDiscoveryProvider } from "./programme-discovery";
+import { classifyProgrammeLead, OfficialWebDiscoveryProvider, type ProgrammeDiscoveryProvider } from "./programme-discovery";
 import { understandProfile } from "./profile-understanding";
 import { verifyProgrammeLead } from "./official-verification";
 import type { OrchestratorEvent, OrchestratorResult, ProgrammeLead, RejectedProgrammeLead } from "./types";
@@ -57,6 +60,7 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
   aiRecommendations = aiRecommendations.map((item) => ({ ...item, country: normalizeRecommendationCountry(item.country) }));
   const allowedAI = aiRecommendations.filter(item => profile.targetCountries.includes(item.country) && item.degreeLevel === profile.targetDegreeLevel && item.schoolName.trim() && item.programName.trim());
   const seenAI = new Set<string>();
+  const aiVerificationLeads: ProgrammeLead[] = [];
   for (const item of allowedAI) {
     const key = `${item.schoolName}|${item.programName}|${item.country}|${item.degreeLevel}`.toLowerCase();
     const lead: ProgrammeLead = {
@@ -68,7 +72,15 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
       discoveryQuery: item.verificationQueries.join(" | "),
       discoveredAt: new Date().toISOString(),
     };
-    reviewQueue.push({ lead, reasons: [seenAI.has(key) ? "DUPLICATE_RESULT" : "PROGRAMME_NOT_VERIFIED"] });
+    if (seenAI.has(key)) {
+      reviewQueue.push({ lead, reasons: ["DUPLICATE_RESULT"] });
+    } else if (item.possibleOfficialUrl && classifyProgrammeLead({ title: lead.searchTitle, url: item.possibleOfficialUrl }) === "official_programme") {
+      // Level C output remains hidden, but a plausible official programme URL
+      // is now passed into the same strict Level B verifier as web discoveries.
+      aiVerificationLeads.push({ ...lead, entityType: "official_programme" });
+    } else {
+      reviewQueue.push({ lead, reasons: ["PROGRAMME_NOT_VERIFIED"] });
+    }
     seenAI.add(key);
   }
   // Level C AI output is discovery input only. It must never become a user-facing
@@ -81,7 +93,7 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
   const niche = expansions.length >= 8; const coverageLow = cachedVerified.length / Math.max(profile.plannedApplicationCount, 1) < .75; const trigger = cachedVerified.length < profile.plannedApplicationCount && (coverageLow || niche);
   const provider = input.discoveryProvider ?? new OfficialWebDiscoveryProvider(); let discovered: ProgrammeLead[] = []; let passes = 0;
   if (trigger) { events.push(event("programme_discovery", "正在检索相关项目", "running")); discovered = await provider.discover(profile, expansions, Math.min(Math.max(profile.plannedApplicationCount * 2, 12), 24)); passes++; events.push(event("programme_discovery", "已完成项目线索发现", "completed", `${discovered.length} 条线索；尚未面向用户展示`)); }
-  let leads = deduplicate([...internal, ...discovered].filter(lead => relationAllowed(lead.fieldRelation, profile.crossDisciplinePreference)), reviewQueue);
+  let leads = deduplicate([...internal, ...aiVerificationLeads, ...discovered].filter(lead => relationAllowed(lead.fieldRelation, profile.crossDisciplinePreference)), reviewQueue);
   events.push(event("entity_verification", "正在验证学校与项目实体", "running")); let verified = [...cachedVerified, ...await verifyLeads(leads.filter(lead => !cachedVerified.some(item => item.officialProgrammeUrl.replace(/\/$/, "") === lead.url.replace(/\/$/, ""))), profile, reviewQueue)]; events.push(event("official_verification", "已完成官方来源核验", "completed", `${verified.length} 个项目通过严格验证（含 ${cachedVerified.length} 个数据库记录），${reviewQueue.length} 条线索进入后台复核`));
   let candidates = verified.map(programme => assessEligibility(profile, programme)).filter(candidate => validateProgrammeForDisplay(candidate, profile));
   if (candidates.length < profile.plannedApplicationCount && passes < 1 && Date.now() - orchestrationStartedAt < 55_000) {
@@ -100,3 +112,4 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
   const emptyReason = candidates.length ? undefined : aiErrorCode && cachedVerified.length === 0 ? "AI 推荐暂时不可用，且当前已核验数据库尚未覆盖这一国家、学历层级与专业组合。请稍后重试。" : cachedVerified.length === 0 ? "当前数据库中没有覆盖该国家、学位层级和专业方向组合的已核验项目。" : "候选项目未通过官方来源与展示校验。";
   return { profile, expansions, candidates, reviewQueue, fallbackLevel: candidates.length >= profile.plannedApplicationCount ? 1 : candidates.length ? 4 : 5, generationStatus, aiStatus: aiErrorCode ? "unavailable" : "completed", aiErrorCode, emptyReason, debug, events, supervisor: { sufficient: candidates.length >= profile.plannedApplicationCount, issues, discoveryPasses: passes } };
 }
+
