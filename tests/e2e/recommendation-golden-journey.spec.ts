@@ -69,8 +69,8 @@ test("planner entry flow creates a profile and reaches rendered recommendations"
   await page.getByLabel("濮撳悕").fill("Golden Journey");
   await page.getByLabel("瀛︽牎鑻辨枃鍚?).fill("Test University");
   await page.getByLabel("涓撲笟", { exact: true }).fill("Business");
-  await page.getByLabel("鑻卞浗").check();
-  await page.getByLabel("娉曞浗").check();
+  await page.getByRole("checkbox", { name: "鑻卞浗", exact: true }).check();
+  await page.getByRole("checkbox", { name: "娉曞浗", exact: true }).check();
   await page.getByLabel("鐩爣涓撲笟锛堢敤銆佸垎闅旓級").fill("International Business");
   await page.getByLabel("鐩爣瀛﹀巻灞傜骇").selectOption("纭曞＋");
   await page.getByRole("button", { name: "淇濆瓨缁熶竴璧勬枡骞堕噸鏂拌绠楁帹鑽? }).click();
