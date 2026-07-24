@@ -25,6 +25,7 @@ test("polluting search results never become official programme leads", () => {
 });
 test("navigation labels and slogans cannot become school or programme entities", () => {
   assert.equal(plausibleInstitutionName("Skip to main content"), false);
+  assert.equal(plausibleInstitutionName("World University"), false);
   assert.equal(plausibleProgrammeName("Make a difference with your difference"), false);
   assert.equal(plausibleInstitutionName("KEDGE Business School"), true);
   assert.equal(plausibleProgrammeName("MSc International Trade & Maritime Logistics"), true);
