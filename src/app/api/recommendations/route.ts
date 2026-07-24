@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 1.1 seconds
-Output:
 import { recommendations } from "@/lib/application-prototype-data";
 import { RECOMMENDATION_MODEL, RECOMMENDATION_PROMPT_VERSION, SchoolRecommendationError } from "@/lib/recommendation/ai-recommendation";
 import { orchestrateRecommendations } from "@/lib/recommendation/orchestrator";
