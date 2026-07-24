@@ -4,8 +4,9 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, Check, CheckCircle2, CircleAlert, Copy, FileUp, LoaderCircle, Upload, X } from "lucide-react";
 import { Card } from "@/components/Card";
-import { ApplicationMode, createApplicationSubmissionOrder, createFixedServiceOrder, getMaterialsForApplication, readApplicationMode, readApplicationRecords, updateApplicationRecord, writeApplicationMode } from "@/lib/application-store";
-import { AdmissionRequirement, ApplicationMaterial, ApplicationRecord, getAdmissionRequirements, RequirementStatus, SchoolRecommendation } from "@/lib/application-prototype-data";
+import { createApplicationSubmissionOrder, createFixedServiceOrder, getMaterialsForApplication, readApplicationRecords, updateApplicationRecord } from "@/lib/application-store";
+import { AdmissionRequirement, ApplicationMaterial, ApplicationRecord, ApplicationSubmissionMode, getAdmissionRequirements, RequirementStatus, SchoolRecommendation } from "@/lib/application-prototype-data";
+import { getVerifiedApplicationPortal, markPortalOpened } from "@/lib/application-journey";
 import { getAdmissionKnowledge } from "@/lib/admission-knowledge";
 import { readActivePlanningRun } from "@/lib/planning-store";
 import { readStudentProfile, StudentProfile, writeStudentProfile, profileDisplay } from "@/lib/student-profile";
@@ -29,6 +30,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
     id: applicationId, planningRunId: readActivePlanningRun()?.id ?? "legacy", schoolRecommendationId: school.id, universityName: school.universityName, programName: school.programName,
     country: school.country, intake: school.intake, status: "preparing_materials", detectedMaterialCount: school.materialsReady, preparedMaterials: school.materialsReady,
     totalMaterials: school.materialsTotal, missingMaterials: [], applicationProgress: Math.round((school.materialsReady / school.materialsTotal) * 45), nextAction: "准备申请材料", serviceType: "none",
+    submissionMode: "unselected", applicationPortalUrl: school.applicationUrl, applicationProvider: school.applicationProvider, applicationLinkStatus: school.applicationLinkStatus, updatedAt: new Date().toISOString(),
   }, [applicationId, school]);
   const requirements = useMemo(() => getAdmissionRequirements(school), [school]);
   const knowledge = getAdmissionKnowledge(school.id);
@@ -49,7 +51,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
   const [activeRequirement, setActiveRequirement] = useState<AdmissionRequirement | null>(null);
   const [confirmedIds, setConfirmedIds] = useState<string[]>([]);
   const [profile, setProfile] = useState<StudentProfile>(() => readStudentProfile());
-  const [applicationMode, setApplicationMode] = useState<ApplicationMode>("unselected");
+  const [applicationMode, setApplicationMode] = useState<ApplicationSubmissionMode>(record.submissionMode);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -57,7 +59,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
       try {
         const saved = window.localStorage.getItem(`atlas.requirement-confirmations.${applicationId}`);
         if (saved) setConfirmedIds(JSON.parse(saved) as string[]);
-        setApplicationMode(readApplicationMode());
+        setApplicationMode(readApplicationRecords().find((item) => item.id === applicationId)?.submissionMode ?? "unselected");
       } catch { /* Ignore invalid prototype data and use defaults. */ }
     }, 0);
     return () => window.clearTimeout(timer);
@@ -87,7 +89,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
       detectedMaterialCount,
       preparedMaterials: detectedMaterialCount,
       missingMaterials,
-      applicationProgress: readyToApply ? 78 : Math.max(20, Math.round((detectedMaterialCount / Math.max(baseMaterials.length, 1)) * 70)),
+      applicationProgress: readyToApply ? 60 : Math.max(15, Math.round(15 + (detectedMaterialCount / Math.max(baseMaterials.length, 1)) * 35)),
       status: readyToApply ? "ready_to_submit" : "preparing_materials",
       nextAction: readyToApply ? "核对申请信息并提交申请" : `补充 ${missingMaterials[0] ?? "申请材料"}`,
     });
@@ -126,12 +128,30 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
       detectedMaterialCount,
       preparedMaterials: detectedMaterialCount,
       missingMaterials: unreadyMaterials.map((material) => material.name),
-      applicationProgress: applicationReady ? 78 : Math.max(20, Math.round((detectedMaterialCount / Math.max(baseMaterials.length, 1)) * 70)),
+      applicationProgress: applicationReady ? 60 : Math.max(15, Math.round(15 + (detectedMaterialCount / Math.max(baseMaterials.length, 1)) * 35)),
       status: applicationReady ? "ready_to_submit" : "preparing_materials",
       nextAction: applicationReady ? "选择申请方式并前往官方申请系统" : pending.length ? `确认 ${pending[0].label}` : `补充 ${unreadyMaterials[0]?.name ?? "申请材料"}`,
     });
   }, [applicationId, applicationReady, baseMaterials, pending, unreadyMaterials]);
-  function chooseService(service: "diy" | "single" | "uk" | "france") { const current = readApplicationRecords().find((item) => item.id === applicationId) ?? record; if (service === "diy") { writeApplicationMode("DIY"); setApplicationMode("DIY"); setSubmissionOpen(false); setNotice("已选择用户自行提交（免费）。请使用上方已核验的官方申请入口完成提交。"); return; } if (service === "single") { createApplicationSubmissionOrder([current]); router.push("/checkout/application-submission"); return; } createFixedServiceOrder(service === "uk" ? "full_service_uk_au" : "full_service_france", readApplicationRecords()); router.push(`/checkout/full-service?country=${service === "uk" ? "uk-au" : "france"}`); }
+  function chooseService(service: "diy" | "single" | "uk" | "france") {
+    const current = readApplicationRecords().find((item) => item.id === applicationId) ?? record;
+    if (service === "diy") {
+      updateApplicationRecord(applicationId, { submissionMode: "diy", nextAction: "前往学校官方系统完成申请" });
+      setApplicationMode("diy");
+      setSubmissionOpen(false);
+      setNotice("已为当前学校选择用户自行提交（免费），不会影响其他学校。");
+      return;
+    }
+    if (service === "single") {
+      updateApplicationRecord(applicationId, { submissionMode: "atlas_single" });
+      createApplicationSubmissionOrder([current]);
+      router.push("/checkout/application-submission");
+      return;
+    }
+    updateApplicationRecord(applicationId, { submissionMode: "atlas_full_service" });
+    createFixedServiceOrder(service === "uk" ? "full_service_uk_au" : "full_service_france", [current]);
+    router.push(`/checkout/full-service?country=${service === "uk" ? "uk-au" : "france"}`);
+  }
 
   function currentRequirement(requirement: AdmissionRequirement) {
     if (effectiveConfirmedIds.includes(requirement.id)) {
@@ -189,18 +209,20 @@ function confirmationLabel(item: AdmissionRequirement) {
   return `确认${item.label}`;
 }
 
-function OfficialSourceSummary({ knowledge, school, applicationId, applicationMode }: { knowledge: ReturnType<typeof getAdmissionKnowledge>; school: SchoolRecommendation; applicationId: string; applicationMode: ApplicationMode }) {
+function OfficialSourceSummary({ knowledge, school, applicationId, applicationMode }: { knowledge: ReturnType<typeof getAdmissionKnowledge>; school: SchoolRecommendation; applicationId: string; applicationMode: ApplicationSubmissionMode }) {
   if (!knowledge) return null;
   const label = (type: string) => type === "language_page" ? "查看官方语言要求" : type === "institution_list" ? "查看中国院校认可名单" : "查看专业官方要求";
-  return <div className="mt-6 rounded-2xl border border-[#e8dfd3] bg-[#f7f0e8] p-4"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div><p className="text-xs uppercase tracking-[0.18em] text-[#9a8b7c]">官方来源</p><p className="mt-2 text-sm text-[#4a3d34]">{knowledge.coverageStatus === "verified" ? "官方要求已核实" : "官方要求已部分核实"} · 最近核实：{knowledge.lastVerifiedAt}</p></div><div className="flex flex-wrap gap-2">{knowledge.sources.map((source) => <a key={source.id} href={source.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-[#d8ccbe] bg-[#fffaf3] px-3 py-2 text-xs text-[#4f6d54] transition hover:bg-white">{label(source.sourceType)}<ArrowUpRight size={13} /></a>)}{applicationMode === "DIY" ? <ApplicationEntryAction school={school} applicationId={applicationId} /> : null}</div></div></div>;
+  return <div className="mt-6 rounded-2xl border border-[#e8dfd3] bg-[#f7f0e8] p-4"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div><p className="text-xs uppercase tracking-[0.18em] text-[#9a8b7c]">官方来源</p><p className="mt-2 text-sm text-[#4a3d34]">{knowledge.coverageStatus === "verified" ? "官方要求已核实" : "官方要求已部分核实"} · 最近核实：{knowledge.lastVerifiedAt}</p></div><div className="flex flex-wrap gap-2">{knowledge.sources.map((source) => <a key={source.id} href={source.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-[#d8ccbe] bg-[#fffaf3] px-3 py-2 text-xs text-[#4f6d54] transition hover:bg-white">{label(source.sourceType)}<ArrowUpRight size={13} /></a>)}{applicationMode === "diy" ? <ApplicationEntryAction school={school} applicationId={applicationId} /> : null}</div></div></div>;
 }
 
 function ApplicationEntryAction({ school, applicationId }: { school: SchoolRecommendation; applicationId: string }) {
   const [confirming, setConfirming] = useState(false);
-  const verified = school.applicationLinkStatus === "verified" && Boolean(school.applicationUrl);
+  const record = readApplicationRecords().find((item) => item.id === applicationId);
+  const portal = record ? getVerifiedApplicationPortal(record) : null;
+  const verified = Boolean(portal);
   const providerLabel = school.applicationProvider === "UCAS" ? "前往 UCAS 申请" : school.applicationProvider === "Campus France" ? "前往 Campus France" : school.applicationProvider === "Mon Master" ? "前往 Mon Master" : school.applicationUrlType === "application_instruction_page" ? "前往学校官方申请" : "前往学校申请系统";
   if (!verified) return <div className="w-full"><button type="button" disabled className="rounded-full bg-[#ded5ca] px-4 py-2 text-xs text-[#8f847a]">申请入口待核验</button><p className="mt-2 text-xs text-[#8f847a]">Atlas 暂未确认该专业的正式申请入口，请先查看学校官方专业页面。</p></div>;
-  if (confirming) return <div className="w-full rounded-2xl border border-[#d8ccbe] bg-[#fffaf3] p-3"><p className="text-xs leading-5 text-[#5d5148]">你即将进入学校官方申请网站。提交申请前，建议先确认 Atlas 中的材料检查结果。</p><p className="mt-1 text-[11px] text-[#8f847a]">该项目通过学校或其指定的官方申请系统提交。</p><div className="mt-3 flex flex-wrap gap-2"><a href={school.applicationUrl} target="_blank" rel="noopener noreferrer" onClick={() => window.localStorage.setItem(`atlas.application.portal-opened.${applicationId}`, JSON.stringify({ applicationPortalOpened: true, openedAt: new Date().toISOString(), applicationSubmitted: false }))} className="inline-flex items-center gap-1 rounded-full bg-[#2f2924] px-4 py-2 text-xs font-medium text-white">继续前往<ArrowUpRight size={13} /></a><button type="button" onClick={() => setConfirming(false)} className="rounded-full border border-[#d8ccbe] px-4 py-2 text-xs text-[#4a3d34]">返回检查材料</button></div></div>;
+  if (confirming) return <div className="w-full rounded-2xl border border-[#d8ccbe] bg-[#fffaf3] p-3"><p className="text-xs leading-5 text-[#5d5148]">你即将进入学校官方申请网站。提交申请前，建议先确认 Atlas 中的材料检查结果。</p><p className="mt-1 text-[11px] text-[#8f847a]">打开外部网站不代表已经提交申请。</p><div className="mt-3 flex flex-wrap gap-2"><a href={portal ?? undefined} target="_blank" rel="noopener noreferrer" onClick={() => { if (record) updateApplicationRecord(applicationId, markPortalOpened(record)); }} className="inline-flex items-center gap-1 rounded-full bg-[#2f2924] px-4 py-2 text-xs font-medium text-white">继续前往<ArrowUpRight size={13} /></a><button type="button" onClick={() => setConfirming(false)} className="rounded-full border border-[#d8ccbe] px-4 py-2 text-xs text-[#4a3d34]">返回检查材料</button></div></div>;
   return <button type="button" onClick={() => setConfirming(true)} className="inline-flex items-center gap-1.5 rounded-full bg-[#2f2924] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#493d34]">{providerLabel}<ArrowUpRight size={13} /></button>;
 }
 
