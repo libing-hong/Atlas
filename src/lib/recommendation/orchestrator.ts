@@ -7,7 +7,7 @@ import { understandProfile } from "./profile-understanding";
 import { verifyProgrammeLead } from "./official-verification";
 import type { OrchestratorEvent, OrchestratorResult, ProgrammeLead, RejectedProgrammeLead } from "./types";
 import { retrieveCachedVerifiedProgrammes, searchCachedOfficialDiscoveries } from "./programme-repository";
-import { buildApplicantProfile, normalizeOpenAIError, OpenAIRecommendationProvider, RECOMMENDATION_MODEL, RECOMMENDATION_PROMPT_VERSION, type AIProgramRecommendation, type AIRecommendationProvider } from "./ai-recommendation";
+import { buildApplicantProfile, normalizeOpenAIError, OpenAIRecommendationProvider, RECOMMENDATION_MODEL, RECOMMENDATION_PROMPT_VERSION, type AIProgramRecommendation, type AIRecommendationProvider, type AISubjectAssessment } from "./ai-recommendation";
 
 const event = (stage: OrchestratorEvent["stage"], label: string, status: OrchestratorEvent["status"], detail?: string): OrchestratorEvent => ({ stage, label, status, detail });
 export function normalizeRecommendationCountry(country: string) {
@@ -55,6 +55,15 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
   try { aiRecommendations = await aiProvider.generate(applicantProfile); }
   catch (error) { aiErrorCode = normalizeOpenAIError(error).code; events.push(event("programme_discovery", "AI 探索候选暂不可用", "completed", "已核验结果仍会正常返回")); }
   aiRecommendations = aiRecommendations.map((item) => ({ ...item, country: normalizeRecommendationCountry(item.country) }));
+  let semanticAssessments: AISubjectAssessment[] = [];
+  if (aiRecommendations.length && aiProvider.assessSubjectRelevance) {
+    try {
+      semanticAssessments = await aiProvider.assessSubjectRelevance(applicantProfile.targetSubjects, aiRecommendations);
+    } catch {
+      events.push(event("programme_discovery", "专业语义复核暂不可用", "completed", "Atlas 将使用保守的名称匹配并保留已核验数据库结果"));
+    }
+  }
+  const semanticByIndex = new Map(semanticAssessments.map(item => [item.index, item]));
   const matchingExpansion = (item: AIProgramRecommendation) => {
     const name = item.programName.toLowerCase().replace(/[^a-z0-9\u00c0-\u024f\u4e00-\u9fff]+/g, " ").trim();
     return expansions.find(expansion => {
@@ -66,7 +75,11 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
       return matchedTokens.length >= Math.min(2, tokens.length);
     });
   };
-  const allowedAI = aiRecommendations.filter(item => profile.targetCountries.includes(item.country) && item.degreeLevel === profile.targetDegreeLevel && item.schoolName.trim() && item.programName.trim() && matchingExpansion(item));
+  const allowedAI = aiRecommendations.filter((item, index) => {
+    const semantic = semanticByIndex.get(index);
+    const subjectAllowed = semantic ? semantic.relevant && relationAllowed(semantic.relation, profile.crossDisciplinePreference) : Boolean(matchingExpansion(item));
+    return profile.targetCountries.includes(item.country) && item.degreeLevel === profile.targetDegreeLevel && item.schoolName.trim() && item.programName.trim() && subjectAllowed;
+  });
   const seenAI = new Set<string>();
   const aiVerificationLeads: ProgrammeLead[] = [];
   for (const item of allowedAI) {
@@ -76,7 +89,7 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
       searchTitle: `${item.schoolName} — ${item.programName}`,
       snippet: item.recommendationReasons.join("；") || null,
       entityType: "unknown",
-      fieldRelation: matchingExpansion(item)?.relation ?? "cross_discipline",
+      fieldRelation: semanticByIndex.get(aiRecommendations.indexOf(item))?.relation ?? matchingExpansion(item)?.relation ?? "cross_discipline",
       discoveryQuery: item.verificationQueries.join(" | "),
       discoveredAt: new Date().toISOString(),
     };
