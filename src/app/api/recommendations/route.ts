@@ -47,7 +47,7 @@ export function toPublicRecommendationResponse(result: OrchestratorResult): Reco
     aiErrorCode: result.aiErrorCode,
     emptyReason: result.emptyReason,
     supervisor: result.supervisor,
-    disclaimer: "Atlas 鏍规嵁鐢ㄦ埛璧勬枡鐢熸垚鍊欓€夐€夋牎鏂规骞舵牳楠屽畼鏂规潵婧愶紱寰呮牳楠岄」鐩笉浠ｈ〃宸茬‘璁ゆ嫑鐢熶俊鎭€?,
+    disclaimer: "Atlas 根据用户资料生成候选选校方案并核验官方来源；待核验项目不代表已确认招生信息。",
   };
 }
 
@@ -134,4 +134,3 @@ export function createRecommendationsPost(overrides: Partial<Dependencies> = {})
 }
 
 export const POST = createRecommendationsPost();
-
