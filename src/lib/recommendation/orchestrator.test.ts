@@ -9,6 +9,7 @@ import { normalizeStudentProfile } from "../student-profile";
 import { aiRecommendationToCandidate, buildApplicantProfile, normalizeOpenAIError, SchoolRecommendationError, type AIProgramRecommendation } from "./ai-recommendation";
 import { normalizeRecommendationCountry, orchestrateRecommendations } from "./orchestrator";
 import { getCandidatePresentation } from "./presentation";
+import { plausibleInstitutionName, plausibleProgrammeName } from "./official-verification";
 import type { ProgrammeCandidate, UnderstoodProfile, VerifiedProgramme } from "./types";
 
 const verifiedProgramme: VerifiedProgramme = {
@@ -21,6 +22,12 @@ test("polluting search results never become official programme leads", () => {
   assert.equal(classifyProgrammeLead({ title: "The Manual of Museum Management", url: "https://amazon.com/book" }), "marketplace");
   assert.equal(classifyProgrammeLead({ title: "英国法学排名 Top 5", url: "https://gostudyin.com/blog/law-ranking" }), "blog");
   assert.equal(classifyProgrammeLead({ title: "Association of Arts Administration directory", url: "https://artsadministration.org/directory" }), "association");
+});
+test("navigation labels and slogans cannot become school or programme entities", () => {
+  assert.equal(plausibleInstitutionName("Skip to main content"), false);
+  assert.equal(plausibleProgrammeName("Make a difference with your difference"), false);
+  assert.equal(plausibleInstitutionName("KEDGE Business School"), true);
+  assert.equal(plausibleProgrammeName("MSc International Trade & Maritime Logistics"), true);
 });
 test("law expansion searches official degree names", () => { const terms = expandField("法学").map(item => item.term); for (const required of ["Law", "LLM", "Master of Laws", "International Law", "Business Law", "Commercial Law", "European Law", "Human Rights Law"]) assert.ok(terms.includes(required)); });
 test("display validator enforces country, degree, names and official source", () => {
