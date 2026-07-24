@@ -35,12 +35,12 @@ export function applicationProgressFor(
 ) {
   if (status === "preparing_materials") {
     const ratio = totalMaterials ? preparedMaterials / totalMaterials : 0;
-    return Math.round(15 + Math.min(1, ratio) * 35);
+    return Math.round(15 + Math.min(1, ratio) * 45);
   }
   const progress: Partial<Record<ApplicationRecordStatus, number>> = {
     considering: 0,
     selected: 10,
-    ready_to_submit: 60,
+    ready_to_submit: 70,
     submission_in_progress: 75,
     submitted: 85,
     waiting_result: 90,
@@ -82,7 +82,7 @@ export function markPortalOpened(record: ApplicationRecord, openedAt = new Date(
     status: "submission_in_progress",
     applicationPortalOpenedAt: openedAt,
     applicationProgress: 75,
-    nextAction: `完成 ${record.universityName} 官方申请并返回确认`,
+    nextAction: "完成该学校官方申请并返回 Atlas 确认",
     updatedAt: openedAt,
   };
 }
