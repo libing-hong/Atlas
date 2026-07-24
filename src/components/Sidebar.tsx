@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { LanguageToggle, useLanguage } from "./language/LanguageProvider";
 import { getApplicationStateSnapshot, getServerApplicationStateSnapshot, subscribeToApplicationState } from "@/lib/application-store";
 import type { ApplicationRecord } from "@/lib/application-prototype-data";
+import { isVisaUnlocked } from "@/lib/application-journey";
 
 const studentLinks = [
   { href: "/dashboard", label: { en: "My Atlas", zh: "我的 Atlas" }, icon: LayoutDashboard, active: true },
@@ -51,7 +52,7 @@ export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
   const pathname = usePathname();
   const { t } = useLanguage();
   const snapshot = useSyncExternalStore(subscribeToApplicationState, getApplicationStateSnapshot, getServerApplicationStateSnapshot);
-  const visaUnlocked = snapshot !== "server" && (JSON.parse(snapshot) as { records: ApplicationRecord[] }).records.some((record) => ["conditional_offer", "unconditional_offer", "accepted"].includes(record.status) && record.offerEvidenceAvailable && record.offerConditionsSatisfied === true && record.isFinalOffer === true);
+  const visaUnlocked = snapshot !== "server" && isVisaUnlocked((JSON.parse(snapshot) as { records: ApplicationRecord[] }).records);
   const links = mode === "admin" ? adminLinks : studentLinks;
 
   return (
@@ -107,7 +108,7 @@ export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
 
       {mode === "student" ? (
         <nav className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-4 border-t border-[#e8dfd3] bg-[#fffaf3]/95 px-2 py-2 shadow-[0_-10px_30px_rgba(88,72,55,0.08)] backdrop-blur lg:hidden">
-          {studentLinks.filter((item) => item.href !== "/dashboard/visa").slice(0, 4).map((item) => {
+          {studentLinks.filter((item) => item.href !== "/dashboard/visa" || visaUnlocked).slice(0, 4).map((item) => {
             const Icon = item.icon;
             const isActive = item.href === "/dashboard/applications"
               ? pathname.startsWith("/dashboard/applications") || pathname.startsWith("/applications")
