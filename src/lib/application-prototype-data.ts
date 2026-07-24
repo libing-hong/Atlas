@@ -20,6 +20,7 @@ export type ApplicationRecordStatus =
   | "selected"
   | "preparing_materials"
   | "ready_to_submit"
+  | "submission_in_progress"
   | "submitted"
   | "waiting_result"
   | "supplement_required"
@@ -29,6 +30,12 @@ export type ApplicationRecordStatus =
   | "accepted"
   | "declined"
   | "withdrawn";
+
+export type ApplicationSubmissionMode =
+  | "unselected"
+  | "diy"
+  | "atlas_single"
+  | "atlas_full_service";
 
 export type MaterialPreparationStatus = "prepared" | "uploading" | "processing" | "needs_confirmation" | "review_required" | "not_detected" | "not_required" | "rejected";
 
@@ -71,6 +78,15 @@ export type ApplicationRecord = {
   nextAction: string;
   nextDeadline?: string;
   serviceType: "none" | "single_school" | "full_service";
+  submissionMode: ApplicationSubmissionMode;
+  applicationPortalUrl?: string;
+  applicationProvider?: string;
+  applicationLinkStatus?: SchoolRecommendation["applicationLinkStatus"];
+  applicationPortalOpenedAt?: string;
+  submittedAt?: string;
+  applicationReference?: string;
+  submissionEvidenceFileName?: string;
+  updatedAt: string;
   decisionStatus?: "waiting_result" | "offer_received" | "waitlisted" | "rejected";
   offerSource?: "student" | "atlas";
   offerEvidenceAvailable?: boolean;
@@ -182,6 +198,11 @@ export function createApplicationRecord(school: SchoolRecommendation, planningRu
     nextAction: `开始准备 ${school.universityName} 的申请材料`,
     nextDeadline: school.deadline,
     serviceType: "none",
+    submissionMode: "unselected",
+    applicationPortalUrl: school.applicationUrl,
+    applicationProvider: school.applicationProvider,
+    applicationLinkStatus: school.applicationLinkStatus,
+    updatedAt: new Date().toISOString(),
   };
 }
 
