@@ -24,7 +24,17 @@ export type AIProgramRecommendation = {
   possibleOfficialUrl: string | null; confidence: number;
 };
 
-export type AIRecommendationProvider = { generate(profile: ApplicantProfile, relaxed?: boolean): Promise<AIProgramRecommendation[]> };
+export type AISubjectAssessment = {
+  index: number;
+  relevant: boolean;
+  relation: "synonym" | "highly_related" | "adjacent" | "cross_discipline";
+  reason: string;
+};
+
+export type AIRecommendationProvider = {
+  generate(profile: ApplicantProfile, relaxed?: boolean): Promise<AIProgramRecommendation[]>;
+  assessSubjectRelevance?(targetSubjects: string[], programmes: AIProgramRecommendation[]): Promise<AISubjectAssessment[]>;
+};
 export type SchoolRecommendationErrorCode = "OPENAI_API_KEY_MISSING" | "OPENAI_AUTHENTICATION_FAILED" | "OPENAI_INSUFFICIENT_QUOTA" | "OPENAI_RATE_LIMITED" | "OPENAI_PERMISSION_DENIED" | "OPENAI_TIMEOUT" | "OPENAI_INVALID_RESPONSE" | "OPENAI_REQUEST_FAILED";
 
 export class SchoolRecommendationError extends Error {
@@ -93,6 +103,18 @@ const fastSchema = {
 } as const;
 
 const requirementCategories = ["degree", "grade", "subject", "language", "experience", "prerequisite", "portfolio"] as const;
+const subjectAssessmentSchema = {
+  type: "object", additionalProperties: false, required: ["assessments"], properties: {
+    assessments: { type: "array", minItems: 1, maxItems: 20, items: {
+      type: "object", additionalProperties: false, required: ["index", "relevant", "relation", "reason"], properties: {
+        index: { type: "integer", minimum: 0, maximum: 19 },
+        relevant: { type: "boolean" },
+        relation: { type: "string", enum: ["synonym", "highly_related", "adjacent", "cross_discipline"] },
+        reason: { type: "string" },
+      },
+    } },
+  },
+} as const;
 
 export class OpenAIRecommendationProvider implements AIRecommendationProvider {
   async generate(profile: ApplicantProfile, relaxed = false) {
@@ -114,6 +136,26 @@ export class OpenAIRecommendationProvider implements AIRecommendationProvider {
       }
     } catch (error) { throw normalizeOpenAIError(error); }
   }
+
+  async assessSubjectRelevance(targetSubjects: string[], programmes: AIProgramRecommendation[]) {
+    if (!programmes.length) return [];
+    try {
+      const startedAt = Date.now();
+      const response = await getOpenAIClient().responses.create({
+        model: RECOMMENDATION_MODEL,
+        max_output_tokens: 1_200,
+        instructions: "Independently judge whether each official university programme name is semantically related to the user's requested subject. Use only the requested subjects and programme names; do not trust any supplied subject label. synonym means the same field, highly_related means a directly related specialization, adjacent means a broader neighboring field, and cross_discipline means unrelated. Mark relevant=false for misleading or unrelated names. Return exactly one assessment per input index.",
+        input: JSON.stringify({ targetSubjects, programmes: programmes.map((item, index) => ({ index, schoolName: item.schoolName, programName: item.programName, degreeLevel: item.degreeLevel })) }),
+        text: { format: { type: "json_schema", name: "atlas_subject_relevance", strict: true, schema: subjectAssessmentSchema } },
+      });
+      console.info("[atlas-openai]", { stage: "subject_relevance_assessment", durationMs: Date.now() - startedAt, model: RECOMMENDATION_MODEL, promptVersion: `${RECOMMENDATION_PROMPT_VERSION}-subject-v1`, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens });
+      const parsed = JSON.parse(response.output_text || "{}") as { assessments?: AISubjectAssessment[] };
+      if (!Array.isArray(parsed.assessments)) throw new SchoolRecommendationError("OPENAI_INVALID_RESPONSE");
+      return parsed.assessments;
+    } catch (error) {
+      throw normalizeOpenAIError(error);
+    }
+  }
 }
 
 const pending = <T>(value: T | null, url: string | null): VerifiedField<T> => ({ value, sourceUrl: url, retrievedAt: new Date().toISOString(), verificationStatus: value === null ? "pending" : "partially_verified" });
@@ -122,3 +164,4 @@ export function aiRecommendationToCandidate(item: AIProgramRecommendation): Prog
   const programme: VerifiedProgramme = { institutionName:item.schoolName,programmeName:item.programName,country:item.country,officialProgrammeUrl:url,officialRootDomain:item.expectedOfficialDomain ?? "pending.atlas",degreeType:item.degreeLevel,degreeLevel:item.degreeLevel,campus:pending(item.city,url),fieldRelation:"highly_related",sourceType:"official",active:pending<boolean>(null,url),intake:pending<string>(null,url),teachingLanguage:pending<string>(null,url),degreeRequirement:pending<string>(null,url),subjectRequirement:pending<string>(null,url),gradeRequirement:pending<string>(null,url),languageRequirement:pending<string>(null,url),tuition:pending<number>(null,url),tuitionCurrency:pending<string>(null,url),deadline:pending<string>(null,url),applicationUrl:pending<string>(null,url),discoveryQuery:item.verificationQueries.join(" | "),discoveredAt:new Date().toISOString() };
   return { institution:item.schoolName,programme:item.programName,institutionName:item.schoolName,programmeName:item.programName,country:item.country,degreeLevel:item.degreeLevel,officialUrl:url,officialProgrammeUrl:url,fieldRelation:"highly_related",academicStatus:"pending",languageStatus:"pending",budgetStatus:"pending",timelineStatus:"pending",verificationStatus:"pending",missingInformation:item.missingRequirements,sources:[],matchExplanation:item.recommendationReasons.join("；"),recommendationBand:item.category === "exploratory" ? "needs_confirmation" : item.category,score:item.estimatedFitScore,verifiedProgramme:programme,generatedByAI:true,aiRecommendation:item,admissionRequirements:item.admissionRequirements };
 }
+
