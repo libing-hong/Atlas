@@ -1,5 +1,7 @@
+import type { ProgrammeCandidate } from "./recommendation/types";
+
 export type RecommendationApiData = {
-  candidates?: unknown[];
+  candidates?: ProgrammeCandidate[];
   emptyReason?: string;
   generationStatus?: "complete" | "partial" | "empty";
   aiStatus?: "completed" | "unavailable";
