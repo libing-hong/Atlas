@@ -33,7 +33,7 @@ export function VisaHomeClient() {
   const workspaceSnapshot = useSyncExternalStore(subscribeVisaWorkspaces, visaSnapshot, serverVisaSnapshot);
   const records = applicationSnapshot === "server" ? [] : (JSON.parse(applicationSnapshot) as { records: ApplicationRecord[] }).records;
   const workspaces = JSON.parse(workspaceSnapshot) as VisaWorkspace[];
-  const offers = records.filter((record) => record.status === "offer_received" && record.offerEvidenceAvailable);
+  const offers = records.filter((record) => ["conditional_offer", "unconditional_offer", "accepted"].includes(record.status) && record.offerEvidenceAvailable);
   const active = workspaces.find((workspace) => workspace.status === "active");
   const activeApplication = active ? records.find((record) => record.id === active.applicationId) : undefined;
   if (!active || !activeApplication) return <OfferGate offers={offers} records={records} archived={workspaces.filter((workspace) => workspace.status === "archived")} />;
@@ -119,3 +119,4 @@ function FactsForm({ facts, setFacts, onSubmit }: { facts: VisaApplicantFacts; s
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="grid gap-2 text-sm text-[#5d5148]"><span>{label}</span>{children}</label>; }
 function YesNo({ value, onChange }: { value: boolean | null; onChange: (event: ChangeEvent<HTMLSelectElement>) => void }) { return <select required value={value === null ? "" : value ? "yes" : "no"} onChange={onChange} className="atlas-input"><option value="">请选择</option><option value="yes">是</option><option value="no">否</option></select>; }
 function ArchivedWorkspaces({ items }: { items: VisaWorkspace[] }) { if (!items.length) return null; return <Card className="p-5"><div className="flex gap-3"><Archive className="mt-0.5 text-[#8f847a]" /><div><h2 className="font-semibold text-[#2f2924]">历史签证工作区</h2>{items.map((item) => <div key={item.id} className="mt-3 text-sm text-[#6f6256]"><p>{item.universityName} · {item.visaType}</p><p className="mt-1 text-xs text-[#8f847a]">已归档：{item.archiveReason ?? "最终录取发生变化"}；原记录未删除。</p></div>)}</div></div></Card>; }
+
