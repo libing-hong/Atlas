@@ -21,8 +21,8 @@ export function AdmissionResultsClient({ records }: { records: ApplicationRecord
     const target = items.find((item) => item.id === uploadTarget);
     if (!file || !target) return;
     await saveMaterialFile(file, "other", target.id);
-    updateApplicationRecord(target.id, { status: "offer_received", decisionStatus: "offer_received", offerSource: "student", offerEvidenceAvailable: true, offerFileName: file.name, applicationProgress: 100, nextAction: "准备签证材料" });
-    setItems((current) => current.map((item) => item.id === target.id ? { ...item, status: "offer_received", decisionStatus: "offer_received", offerSource: "student", offerEvidenceAvailable: true, offerFileName: file.name, applicationProgress: 100, nextAction: "准备签证材料" } : item));
+    updateApplicationRecord(target.id, { status: "conditional_offer", decisionStatus: "offer_received", offerSource: "student", offerEvidenceAvailable: true, offerFileName: file.name, applicationProgress: 100, nextAction: "确认 Offer 条件与最终入读选择" });
+    setItems((current) => current.map((item) => item.id === target.id ? { ...item, status: "conditional_offer", decisionStatus: "offer_received", offerSource: "student", offerEvidenceAvailable: true, offerFileName: file.name, applicationProgress: 100, nextAction: "确认 Offer 条件与最终入读选择" } : item));
     event.target.value = "";
   }
 
@@ -41,3 +41,4 @@ export function AdmissionResultsClient({ records }: { records: ApplicationRecord
       {hasOfferEvidence ? <Card className="border border-[#c9dbc5] bg-[#f0f5ef] p-5"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div className="flex gap-3"><PlaneTakeoff className="mt-1 shrink-0 text-[#5f805f]" /><div><h3 className="font-semibold text-[#36573c]">录取凭证已保存</h3><p className="mt-1 text-sm text-[#58705b]">确认 Offer 条件已经满足并选择最终入读学校后，Atlas 才会按学校所在国家创建签证工作区。</p></div></div><Link href="/dashboard/visa" className="inline-flex shrink-0 items-center justify-center rounded-full bg-[#5f805f] px-5 py-3 text-sm text-white">确认最终入读学校</Link></div></Card> : null}
   </section>;
 }
+

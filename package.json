@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run test:planning && npm run test:recommendation && next build",
+    "build": "npm run test:all && next build",
     "start": "next start",
     "lint": "eslint .",
     "test:planning": "tsx --test src/lib/planning-report.test.ts",
@@ -13,7 +13,8 @@
     "test:visa": "tsx --test src/lib/visa-rules.test.ts src/lib/visa-engine.test.ts",
     "test:security": "tsx --test src/lib/server/api-security.test.ts",
     "test:rls": "tsx --test src/lib/data/rls.test.ts",
-    "test:smoke": "node scripts/smoke-test.mjs"
+    "test:smoke": "node scripts/smoke-test.mjs",
+    "test:all": "npm run test:planning && npm run test:recommendation && npm run test:materials && npm run test:visa && npm run test:security && npm run test:rls"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.1",
@@ -35,3 +36,4 @@
     "typescript": "^5.9.3"
   }
 }
+

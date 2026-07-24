@@ -15,7 +15,20 @@ export type ApplicationHomeState =
 
 export type RecommendationCategory = "reach" | "target" | "safer" | "manual_review" | "currently_not_eligible";
 
-export type ApplicationRecordStatus = "materials_in_progress" | "ready_to_apply" | "manual_review" | "submitted" | "waiting_result" | "supplement_required" | "offer_received";
+export type ApplicationRecordStatus =
+  | "considering"
+  | "selected"
+  | "preparing_materials"
+  | "ready_to_submit"
+  | "submitted"
+  | "waiting_result"
+  | "supplement_required"
+  | "rejected"
+  | "conditional_offer"
+  | "unconditional_offer"
+  | "accepted"
+  | "declined"
+  | "withdrawn";
 
 export type MaterialPreparationStatus = "prepared" | "uploading" | "processing" | "needs_confirmation" | "review_required" | "not_detected" | "not_required" | "rejected";
 
@@ -160,7 +173,7 @@ export function createApplicationRecord(school: SchoolRecommendation, planningRu
     programName: school.programName,
     country: school.country,
     intake: school.intake,
-    status: "materials_in_progress",
+    status: "preparing_materials",
     detectedMaterialCount: school.materialsReady,
     preparedMaterials: school.materialsReady,
     totalMaterials: school.materialsTotal,
@@ -320,6 +333,7 @@ export const applicationStateCopy: Record<ApplicationHomeState, {
     cta: "查看并处理 Offer",
   },
 };
+
 
 
 

@@ -128,7 +128,7 @@ export function resetDerivedPlanningState(runId: string) {
 export function clearPrototypePlanningData() {
   if (typeof window === "undefined") return;
   const records = safeJson<Array<{ status?: string }>>("atlas.application.records.v1", []);
-  const protectedStatuses = new Set(["submitted", "waiting_result", "supplement_required", "offer_received"]);
+  const protectedStatuses = new Set(["submitted", "waiting_result", "supplement_required", "conditional_offer", "unconditional_offer", "accepted"]);
   window.localStorage.setItem("atlas.application.records.v1", JSON.stringify(records.filter((record) => protectedStatuses.has(record.status ?? ""))));
   const orders = safeJson<Array<{ status?: string }>>("atlas.service-orders.v1", []);
   window.localStorage.setItem("atlas.service-orders.v1", JSON.stringify(orders.filter((order) => ["paid", "processing", "refunded"].includes(order.status ?? ""))));

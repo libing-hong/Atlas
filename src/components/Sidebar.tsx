@@ -51,7 +51,7 @@ export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
   const pathname = usePathname();
   const { t } = useLanguage();
   const snapshot = useSyncExternalStore(subscribeToApplicationState, getApplicationStateSnapshot, getServerApplicationStateSnapshot);
-  const visaUnlocked = snapshot !== "server" && (JSON.parse(snapshot) as { records: ApplicationRecord[] }).records.some((record) => record.status === "offer_received" && record.offerEvidenceAvailable && record.offerConditionsSatisfied === true && record.isFinalOffer === true);
+  const visaUnlocked = snapshot !== "server" && (JSON.parse(snapshot) as { records: ApplicationRecord[] }).records.some((record) => ["conditional_offer", "unconditional_offer", "accepted"].includes(record.status) && record.offerEvidenceAvailable && record.offerConditionsSatisfied === true && record.isFinalOffer === true);
   const links = mode === "admin" ? adminLinks : studentLinks;
 
   return (
@@ -145,3 +145,4 @@ export function Sidebar({ mode = "student" }: { mode?: "student" | "admin" }) {
     </>
   );
 }
+

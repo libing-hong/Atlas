@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export type AtlasRole = "student" | "advisor" | "admin";
-export type AtlasSession = { userId: string; authUserId: string; role: AtlasRole };
+export type AtlasSession = { userId: string; authUserId: string; role: AtlasRole; accessToken: string };
 
 export const isPrototypeMode = () => !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -27,7 +27,14 @@ export async function getAtlasSession(request?: Request): Promise<AtlasSession |
   if (authError || !authData.user) return null;
   const { data: profile, error: profileError } = await client.from("users").select("id, role").eq("auth_user_id", authData.user.id).maybeSingle();
   if (profileError || !profile || !["student", "advisor", "admin"].includes(profile.role)) return null;
-  return { userId: profile.id, authUserId: authData.user.id, role: profile.role as AtlasRole };
+  return { userId: profile.id, authUserId: authData.user.id, role: profile.role as AtlasRole, accessToken: token };
+}
+
+export function authenticatedSupabase(accessToken: string) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) throw new Error("Supabase is not configured");
+  return createClient(url, anonKey, { global: { headers: { Authorization: `Bearer ${accessToken}` } }, auth: { persistSession: false, autoRefreshToken: false } });
 }
 
 export async function requirePageRole(roles: AtlasRole[]) {
@@ -42,3 +49,4 @@ export async function authorizeRequest(request: Request, roles: AtlasRole[]) {
   if (!roles.includes(session.role)) return { ok: false as const, status: 403 as const, session };
   return { ok: true as const, status: 200 as const, session };
 }
+
