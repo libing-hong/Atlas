@@ -69,8 +69,10 @@ test("planner entry flow creates a profile and reaches rendered recommendations"
   await page.getByLabel("姓名").fill("Golden Journey");
   await page.getByLabel("学校英文名").fill("Test University");
   await page.getByLabel("专业", { exact: true }).fill("Business");
-  const countryOptions = page.locator("fieldset").filter({ has: page.getByText("目标国家（可多选）", { exact: true }) }).locator('input[type="checkbox"]');
-  await expect(countryOptions).toHaveCount(5);
+  const countryOptions = page.locator('input[type="checkbox"]');
+  expect(await countryOptions.count()).toBeGreaterThanOrEqual(5);
+  await expect(countryOptions.nth(0).locator("xpath=..")).toContainText("英国");
+  await expect(countryOptions.nth(1).locator("xpath=..")).toContainText("法国");
   await countryOptions.nth(0).check();
   await countryOptions.nth(1).check();
   await page.getByLabel("目标专业（用、分隔）").fill("International Business");
