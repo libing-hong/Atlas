@@ -21,6 +21,9 @@ const normalizeTargetLevel = (value: DegreeLevel | null) => value;
 const detectDegreeLevel = (value: string): DegreeLevel | null => /\b(?:phd|doctor(?:ate|al))\b/i.test(value) ? "doctorate" : /\b(?:master|msc|m\.sc|ma\b|m\.a\.|llm|mba|bac\s*\+\s*[45])\b/i.test(value) ? "master" : /\b(?:bachelor|bsc|ba\b|licence|undergraduate)\b/i.test(value) ? "bachelor" : null;
 const cleanName = (value: unknown) => typeof value === "string" ? decode(value.replace(/<[^>]+>/g, " ")).replace(/^[|·–—:\s]+|[|·–—:\s]+$/g, "") : null;
 const types = (value: unknown) => Array.isArray(value) ? value.map(String) : value ? [String(value)] : [];
+const genericPageCopy = /\b(skip to|main content|make a difference|welcome|home page|page not found|accessibility|cookie|privacy|menu|search|discover more|learn more)\b/i;
+export const plausibleInstitutionName = (value: string | null) => Boolean(value && value.length >= 4 && value.length <= 120 && !genericPageCopy.test(value) && /university|universit[eé]|school|college|école|institute|institut/i.test(value));
+export const plausibleProgrammeName = (value: string | null) => Boolean(value && value.length >= 4 && value.length <= 180 && !genericPageCopy.test(value) && /\b(master|msc|m\.sc|ma\b|m\.a\.|llm|mba|bachelor|bsc|ba\b|phd|doctor|degree|programme|program)\b/i.test(value));
 
 function structuredData(html: string): Record<string, unknown>[] {
   const records: Record<string, unknown>[] = []; const pattern = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi; let match: RegExpExecArray | null;
@@ -70,7 +73,10 @@ export async function verifyProgrammeLead(lead: ProgrammeLead, profile: Understo
   const response = await safeFetchText(lead.url, { timeoutMs: 5_000, maxBytes: 1_500_000, allowedContentTypes: ["text/html", "application/xhtml+xml"], init: { headers: { "User-Agent": "AtlasOfficialVerifier/2.0" } } }).catch(() => null);
   if (!response?.ok) return { rejection: { lead, reasons: ["PROGRAMME_NOT_VERIFIED"] } };
   const finalUrl = response.url || lead.url; const finalParsed = new URL(finalUrl); const html = response.text; const body = plainText(html); const records = structuredData(html);
-  const institutionName = extractInstitution(records, body); const programmeName = extractProgramme(records, html, body); const officialRootDomain = rootDomain(finalParsed.hostname);
+  const extractedInstitutionName = extractInstitution(records, body); const extractedProgrammeName = extractProgramme(records, html, body);
+  const institutionName = plausibleInstitutionName(extractedInstitutionName) ? extractedInstitutionName : null;
+  const programmeName = plausibleProgrammeName(extractedProgrammeName) ? extractedProgrammeName : null;
+  const officialRootDomain = rootDomain(finalParsed.hostname);
   const country = finalParsed.hostname.endsWith(".ac.uk") ? "英国" : finalParsed.hostname.endsWith(".edu.au") ? "澳洲" : finalParsed.hostname.endsWith(".fr") ? "法国" : extractStructuredCountry(records) ?? canonicalCountry(`${finalParsed.hostname} ${body.slice(0, 12000)}`);
   const institutionVerified = Boolean(institutionName && officialRootDomain && !blockedDomain.test(finalParsed.hostname));
   const institutionVerification: InstitutionVerification = { institutionVerified, institutionName, country, officialRootDomain };
@@ -105,3 +111,4 @@ export function sourcesFor(programme: VerifiedProgramme): SourceEvidence[] {
   for (const [name, value] of fields) { if (!value.sourceUrl) continue; const current = grouped.get(value.sourceUrl) ?? { sourceUrl: value.sourceUrl, retrievedAt: value.retrievedAt, verificationStatus: value.verificationStatus, fields: [], sourceType: "official" as const }; current.fields.push(name); if (value.verificationStatus !== "verified") current.verificationStatus = "partially_verified"; grouped.set(value.sourceUrl, current); }
   return [...grouped.values()];
 }
+
