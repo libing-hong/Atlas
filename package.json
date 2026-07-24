@@ -17,8 +17,9 @@
     "test:visa": "tsx --test src/lib/visa-rules.test.ts src/lib/visa-engine.test.ts",
     "test:security": "tsx --test src/lib/server/api-security.test.ts",
     "test:rls": "tsx --test src/lib/data/rls.test.ts",
+    "test:scope": "node --test scripts/protected-scope.test.mjs",
     "test:smoke": "node scripts/run-smoke-test.mjs",
-    "test:all": "npm run test:planning && npm run test:recommendation && npm run test:materials && npm run test:visa && npm run test:security && npm run test:rls && npm run test:smoke",
+    "test:all": "npm run test:planning && npm run test:recommendation && npm run test:materials && npm run test:visa && npm run test:security && npm run test:rls && npm run test:scope && npm run test:smoke",
     "test:ci": "npm run validate:files && npm run lint && npm run typecheck && npm run test:all && next build",
     "test:e2e": "node scripts/run-playwright.mjs"
   },
@@ -31,6 +32,7 @@
     "react-dom": "^19.2.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.55.0",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^24.10.2",
     "@types/react": "^19.2.7",
@@ -42,3 +44,4 @@
     "typescript": "^5.9.3"
   }
 }
+
