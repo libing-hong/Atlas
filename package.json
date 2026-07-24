@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run test:all && next build",
+    "build": "next build",
+    "ci:check": "npm run test:all && next build",
     "start": "next start",
     "lint": "eslint .",
     "test:planning": "tsx --test src/lib/planning-report.test.ts",
