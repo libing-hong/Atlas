@@ -34,13 +34,13 @@ test("two-school DIY submission, Offer upload and visa workspace journey", async
         programName: "MSc International Business",
         country: "法国",
         intake: "2027 秋季",
-        status: "ready_to_submit",
+        status: "preparing_materials",
         detectedMaterialCount: 8,
         preparedMaterials: 8,
         totalMaterials: 8,
         missingMaterials: [],
-        applicationProgress: 60,
-        nextAction: "选择申请方式",
+        applicationProgress: 45,
+        nextAction: "继续准备材料",
         nextDeadline: "2027-01-15",
         serviceType: "none",
         submissionMode: "unselected",
@@ -83,30 +83,43 @@ test("two-school DIY submission, Offer upload and visa workspace journey", async
   await expect(page.getByText("University of Warwick").first()).toBeVisible();
 
   const kedge = page.getByTestId("application-progress-app-a");
-  const warwick = page.getByTestId("application-progress-app-b");
-  await kedge.getByRole("button", { name: "用户自行提交" }).click();
-  await expect(kedge.getByText("申请方式：用户自行提交", { exact: true })).toBeVisible();
-  await expect(warwick.getByText("申请方式：尚未选择", { exact: true })).toBeVisible();
+  await expect(kedge.getByRole("button", { name: "用户自行提交" })).toHaveCount(0);
+  await expect(kedge.getByRole("link", { name: "继续准备材料" })).toBeVisible();
+  await page.evaluate(() => {
+    const records = JSON.parse(localStorage.getItem("atlas.application.records.v1") ?? "[]");
+    localStorage.setItem("atlas.application.records.v1", JSON.stringify(records.map((item: { id: string }) => item.id === "app-a" ? {
+      ...item,
+      status: "ready_to_submit",
+      applicationProgress: 70,
+      nextAction: "选择申请方式",
+    } : item)));
+    window.dispatchEvent(new Event("atlas-application-state-change"));
+  });
+  const readyKedge = page.getByTestId("application-progress-app-a");
+  const unchangedWarwick = page.getByTestId("application-progress-app-b");
+  await expect(readyKedge.getByRole("button", { name: "用户自行提交" })).toBeVisible();
 
   const popupPromise = page.waitForEvent("popup");
-  await kedge.getByRole("button", { name: "前往学校申请系统" }).click();
+  await readyKedge.getByRole("button", { name: "用户自行提交" }).click();
   const popup = await popupPromise;
   await expect(popup).toHaveURL("https://apply.example.edu/kedge");
   await popup.close();
-  await expect(kedge.getByText("已打开官方申请系统")).toBeVisible();
-  await expect(kedge.getByText("正在填写官方申请")).toBeVisible();
+  await expect(readyKedge.getByText("已打开官方申请系统")).toBeVisible();
+  await expect(readyKedge.getByText("打开申请网站不代表已经正式提交")).toBeVisible();
+  await expect(readyKedge.getByText("正在填写官方申请")).toBeVisible();
+  await expect(unchangedWarwick.getByText("可以提交")).toBeVisible();
 
-  await kedge.getByRole("button", { name: "我已提交申请" }).click();
-  await kedge.getByRole("button", { name: "确认已完成正式提交" }).click();
-  await expect(kedge.getByText("等待学校结果")).toBeVisible();
-  await expect(warwick.getByText("可以提交")).toBeVisible();
+  await readyKedge.getByRole("button", { name: "我已提交申请" }).click();
+  await readyKedge.getByRole("button", { name: "确认已完成正式提交" }).click();
+  await expect(readyKedge.getByText("等待学校结果")).toBeVisible();
+  await expect(unchangedWarwick.getByText("可以提交")).toBeVisible();
 
-  await kedge.locator('input[type="file"]').first().setInputFiles({
+  await readyKedge.locator('input[type="file"]').first().setInputFiles({
     name: "mock-kedge-offer.pdf",
     mimeType: "application/pdf",
     buffer: Buffer.from("mock offer"),
   });
-  await expect(kedge.getByText("收到有条件 Offer")).toBeVisible();
+  await expect(readyKedge.getByText("收到有条件 Offer")).toBeVisible();
   await expect(page.getByRole("link", { name: "进入我的签证" })).toBeVisible();
 
   await page.getByRole("link", { name: "进入我的签证" }).click();
