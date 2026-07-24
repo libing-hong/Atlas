@@ -132,11 +132,16 @@ export function activateApplicationWorkspace(selectedIds: string[], schools: Sch
 export function readApplicationRecords(planningRunId?: string): ApplicationRecord[] {
   if (typeof window === "undefined") return [];
   try {
-    const records = JSON.parse(window.localStorage.getItem(recordsKey) ?? "[]") as ApplicationRecord[];
+    const records = JSON.parse(window.localStorage.getItem(recordsKey) ?? "[]") as Array<Omit<ApplicationRecord, "status"> & { status: string }>;
     const normalized = records.map((record) => {
       const legacyEmpty = !record.totalMaterials;
       const totalMaterials = legacyEmpty ? commonMaterials.length : record.totalMaterials;
       const preparedMaterials = legacyEmpty ? 0 : record.preparedMaterials;
+      const legacyStatus = record.status === "materials_in_progress" ? "preparing_materials"
+        : record.status === "ready_to_apply" ? "ready_to_submit"
+        : record.status === "manual_review" ? "preparing_materials"
+        : record.status === "offer_received" ? (record.offerConditionsSatisfied ? "unconditional_offer" : "conditional_offer")
+        : record.status;
       return {
         ...record,
         planningRunId: record.planningRunId ?? "legacy",
@@ -145,7 +150,9 @@ export function readApplicationRecords(planningRunId?: string): ApplicationRecor
         detectedMaterialCount: legacyEmpty ? 0 : record.detectedMaterialCount ?? preparedMaterials,
         missingMaterials: legacyEmpty ? commonMaterials.map((item) => item.name) : record.missingMaterials,
         applicationProgress: legacyEmpty ? 0 : record.applicationProgress ?? Math.round((preparedMaterials / Math.max(totalMaterials, 1)) * 45),
-      };
+        status: legacyStatus,
+        decisionStatus: record.decisionStatus ?? (["conditional_offer", "unconditional_offer", "accepted"].includes(legacyStatus) ? "offer_received" as const : "waiting_result" as const),
+      } as ApplicationRecord;
     });
     return planningRunId ? normalized.filter((record) => record.planningRunId === planningRunId) : normalized;
   } catch { return []; }
@@ -318,7 +325,7 @@ export function completeServiceOrder(orderId: string) {
     const purchasedIds = new Set(target.items.map((item) => item.applicationId));
     writeApplicationRecords(readApplicationRecords().map((record) => purchasedIds.has(record.id) ? {
       ...record,
-      status: "manual_review" as const,
+      status: "preparing_materials" as const,
       serviceType: "single_school" as const,
       applicationProgress: Math.max(record.applicationProgress, 82),
       nextAction: "等待 Atlas 审核申请材料与基本信息",
@@ -334,7 +341,7 @@ export function completeServiceOrder(orderId: string) {
       : ["英国", "澳洲", "GB", "AU"].includes(record.country);
     writeApplicationRecords(readApplicationRecords().map((record) => countryMatch(record) ? {
       ...record,
-      status: "manual_review" as const,
+      status: "preparing_materials" as const,
       serviceType: "full_service" as const,
       applicationProgress: Math.max(record.applicationProgress, 82),
       nextAction: "等待 Atlas 启动全流程服务审核",
