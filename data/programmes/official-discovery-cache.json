@@ -86,6 +86,17 @@
     "discoveredAt": "2026-07-24T11:20:00.000Z",
     "sourceType": "external_official_discovery",
     "verificationStatus": "verified"
+  },
+  {
+    "institution": "KEDGE Business School",
+    "programme": "MSc International Trade & Maritime Logistics",
+    "officialUrl": "https://student.kedge.edu/programmes/international-trade-logistics",
+    "countries": ["法国", "France"],
+    "fieldTerms": ["International Trade", "Global Trade", "International Trade and Logistics", "International Trade & Logistics", "International Trade and Maritime Logistics", "International Trade & Maritime Logistics", "Commerce international", "国际贸易"],
+    "discoveryQuery": "official verification: KEDGE MSc International Trade & Maritime Logistics",
+    "discoveredAt": "2026-07-24T11:35:00.000Z",
+    "sourceType": "external_official_discovery",
+    "verificationStatus": "verified"
   }
 ]
 
