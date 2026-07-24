@@ -38,14 +38,6 @@ const modeCopy: Record<ApplicationSubmissionMode, string> = {
   atlas_full_service: "Atlas 全流程服务",
 };
 
-function providerAction(provider?: string) {
-  if (provider === "UCAS") return "前往 UCAS 申请";
-  if (provider === "Campus France") return "前往 Campus France";
-  if (provider === "Mon Master") return "前往 Mon Master";
-  if (provider === "university") return "前往学校申请系统";
-  return "查看学校官方申请步骤";
-}
-
 export function ApplicationProgressBoard({ records }: { records: ApplicationRecord[] }) {
   const summary = applicationJourneySummary(records);
   return <section>
@@ -78,7 +70,19 @@ function ApplicationProgressCard({ record }: { record: ApplicationRecord }) {
   const portal = getVerifiedApplicationPortal(record);
 
   function persist(next: ApplicationRecord) { updateApplicationRecord(record.id, next); }
-  function selectMode(mode: ApplicationSubmissionMode) { persist(chooseSubmissionMode(record, mode)); }
+  function selectMode(mode: ApplicationSubmissionMode) {
+    const selected = chooseSubmissionMode(record, mode);
+    if (mode !== "diy") {
+      persist(selected);
+      return;
+    }
+    if (!portal) {
+      persist(selected);
+      return;
+    }
+    persist(markPortalOpened(selected));
+    window.open(portal, "_blank", "noopener,noreferrer");
+  }
   function openPortal() {
     if (!portal) return;
     persist(markPortalOpened(record));
@@ -106,18 +110,22 @@ function ApplicationProgressCard({ record }: { record: ApplicationRecord }) {
       <span className="self-start rounded-full border border-[#d8ccbe] bg-[#f7f0e8] px-3 py-1 text-xs text-[#5d5148]">{statusCopy[record.status] ?? record.status}</span>
     </div>
     <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#e8dfd3]"><div className="h-full rounded-full bg-[#6f856a]" style={{ width: `${record.applicationProgress}%` }} /></div>
-    <div className="mt-2 flex justify-between text-xs text-[#8f847a]"><span>流程进度 {record.applicationProgress}%（不是录取概率）</span><span>{record.preparedMaterials}/{record.totalMaterials} 项材料</span></div>
+    <div className="mt-2 flex justify-between text-xs text-[#8f847a]"><span>流程完成度 {record.applicationProgress}%（不是录取概率）</span><span>{record.preparedMaterials}/{record.totalMaterials} 项材料</span></div>
     <div className="mt-4 grid gap-2 text-sm text-[#5d5148] md:grid-cols-3"><p>申请方式：{modeCopy[record.submissionMode]}</p><p>最近更新：{new Date(record.updatedAt).toLocaleDateString("zh-CN")}</p><p>截止日期：{record.nextDeadline ?? "待确认"}</p></div>
     <p className="mt-3 text-sm font-medium text-[#2f2924]">下一步：{record.nextAction}</p>
 
-    {record.status === "ready_to_submit" || record.status === "preparing_materials" ? <div className="mt-4 flex flex-wrap gap-2">
+    {record.status === "preparing_materials" ? <div className="mt-4">
+      <Link href={`/applications/${encodeURIComponent(record.id)}/materials`} className="inline-flex rounded-full bg-[#2f2924] px-4 py-2.5 text-sm text-white">继续准备材料</Link>
+    </div> : null}
+
+    {record.status === "ready_to_submit" ? <div className="mt-4 flex flex-wrap gap-2">
       <button type="button" onClick={() => selectMode("diy")} className="rounded-full bg-[#2f2924] px-4 py-2.5 text-sm text-white">用户自行提交</button>
       <button type="button" onClick={() => selectMode("atlas_single")} className="rounded-full border border-[#d8ccbe] px-4 py-2.5 text-sm">选择单校服务</button>
     </div> : null}
 
     {record.submissionMode === "diy" ? <div className="mt-4 rounded-2xl bg-[#fffaf3] p-4">
-      {portal ? <button type="button" onClick={openPortal} className="inline-flex items-center gap-2 rounded-full bg-[#2f2924] px-4 py-2.5 text-sm text-white">{providerAction(record.applicationProvider)}<ArrowUpRight size={14} /></button> : <p className="text-sm text-[#8a5a51]">正式申请入口仍在核验。请在材料工作区查看经过核验的专业官方页面。</p>}
-      {record.applicationPortalOpenedAt ? <div className="mt-3"><p className="text-sm font-medium text-[#4f6d54]">已打开官方申请系统</p><p className="mt-1 text-xs text-[#6f6256]">完成提交后，请返回 Atlas 更新状态。打开外部网站不代表已经提交。</p><button type="button" onClick={() => setConfirming(true)} className="mt-3 rounded-full border border-[#c7aa7b] px-4 py-2 text-sm">我已提交申请</button></div> : null}
+      {!portal ? <div><p className="text-sm font-medium text-[#8a5a51]">正式申请入口仍在核验</p>{record.officialProgramUrl ? <a href={record.officialProgramUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-sm text-[#4f6d54] underline underline-offset-4">查看经过核验的专业官方页面<ArrowUpRight size={14} /></a> : <p className="mt-2 text-xs text-[#6f6256]">请在材料工作区查看经过核验的专业官方页面。</p>}</div> : null}
+      {record.applicationPortalOpenedAt ? <div><p className="text-sm font-medium text-[#4f6d54]">已打开官方申请系统</p><p className="mt-1 text-xs text-[#6f6256]">打开申请网站不代表已经正式提交</p><p className="mt-1 text-xs text-[#6f6256]">完成后请返回 Atlas 点击我已提交申请</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={openPortal} className="inline-flex items-center gap-2 rounded-full bg-[#2f2924] px-4 py-2.5 text-sm text-white">继续填写官方申请<ArrowUpRight size={14} /></button><button type="button" onClick={() => setConfirming(true)} className="rounded-full border border-[#c7aa7b] px-4 py-2 text-sm">我已提交申请</button></div></div> : null}
     </div> : null}
 
     {confirming ? <div className="mt-4 grid gap-3 rounded-2xl border border-[#d8ccbe] p-4 md:grid-cols-2">
