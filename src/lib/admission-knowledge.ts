@@ -37,10 +37,6 @@ export type ProgramRequirementSet = {
   institutionEligibility?: { status: InstitutionEligibilityStatus; institutionName: string; note: string; sourceId: string };
 };
 
-const checkedAt = "2026-07-14";
-
-const source = (id: string, url: string, title: string, sourceType: OfficialSource["sourceType"]): OfficialSource => ({ id, url, title, sourceType, retrievedAt: checkedAt, lastCheckedAt: checkedAt, official: true });
-
 export const admissionKnowledge: Record<string, ProgramRequirementSet> = {};
 
 export function getAdmissionKnowledge(schoolId: string) {
