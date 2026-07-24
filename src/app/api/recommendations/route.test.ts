@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 1.1 seconds
-Output:
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildRecommendationDiagnostic, createRecommendationsPost } from "./route";
