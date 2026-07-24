@@ -3,6 +3,7 @@ import { ArrowRight, Check, ShieldCheck } from "lucide-react";
 import { Card } from "@/components/Card";
 import { TopNav } from "@/components/PageShell";
 
+// Private Beta production landing page.
 const steps = [
   ["01", "填写一次背景", "约 5–8 分钟。填写教育、成绩、语言、预算和申请目标。"],
   ["02", "获得已核验推荐", "OpenAI 理解不同背景与专业需求，正式推荐只展示通过官方来源核验的项目。"],
