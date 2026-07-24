@@ -69,8 +69,13 @@ test("planner entry flow creates a profile and reaches rendered recommendations"
   await page.getByLabel("姓名").fill("Golden Journey");
   await page.getByLabel("学校英文名").fill("Test University");
   await page.getByLabel("专业", { exact: true }).fill("Business");
-  await page.getByText("英国", { exact: true }).click();
-  await page.getByText("法国", { exact: true }).click();
+  for (const country of ["英国", "法国"]) {
+    await page.getByText(country, { exact: true }).evaluateAll((elements, label) => {
+      const visible = elements.find((element) => element instanceof HTMLElement && element.offsetParent !== null);
+      if (!(visible instanceof HTMLElement)) throw new Error(`No visible planner choice for ${label}`);
+      visible.click();
+    }, country);
+  }
   await page.getByLabel("目标专业（用、分隔）").fill("International Business");
   await page.getByLabel("目标学历层级").selectOption("硕士");
   await page.getByRole("button", { name: "保存统一资料并重新计算推荐" }).click();
