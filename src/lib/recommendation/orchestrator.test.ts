@@ -86,6 +86,18 @@ test("AI country aliases normalize before strict target-country filtering", () =
   assert.equal(normalizeRecommendationCountry("UK"), "英国");
 });
 
+test("AI cannot label an unrelated programme as a matching subject", async () => {
+  const raw = normalizeStudentProfile({ targetCountries: ["英国"], targetSubjects: ["International Business"], targetDegreeLevel: "硕士" });
+  const unrelated: AIProgramRecommendation = {
+    schoolName: "The University of Manchester", schoolNameLocal: null, programName: "MA Classics and Ancient History", programNameLocal: null,
+    country: "UK", city: "Manchester", degreeLevel: "master", subjectArea: "International Business", category: "target", estimatedFitScore: 80,
+    recommendationReasons: ["AI supplied an incorrect subject label"], applicantStrengths: [], admissionConcerns: [], admissionRequirements: [], missingRequirements: [],
+    verificationQueries: [], expectedOfficialDomain: "manchester.ac.uk", possibleOfficialUrl: "https://www.manchester.ac.uk/study/masters/courses/list/08036/ma-classics-and-ancient-history/", confidence: .7,
+  };
+  const result = await orchestrateRecommendations({ profile: raw, aiProvider: { generate: async () => [unrelated] }, discoveryProvider: { discover: async () => [] } });
+  assert.equal(result.candidates.some(item => item.programmeName.includes("Classics")), false);
+});
+
 test("applicant profile sends facts Atlas already knows without inventing missing scores", () => {
   const raw = normalizeStudentProfile({ targetCountries:["法国","英国"],targetSubjects:["艺术管理"],targetDegreeLevel:"硕士",educationHistory:[{id:"durham",country:"英国",institutionNameEn:"Durham University",major:"Arts",degreeLevel:"本科",arithmeticAverage:72}],languageTests:[] });
   const result = buildApplicantProfile(raw, understandProfile(raw));

@@ -55,7 +55,18 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
   try { aiRecommendations = await aiProvider.generate(applicantProfile); }
   catch (error) { aiErrorCode = normalizeOpenAIError(error).code; events.push(event("programme_discovery", "AI 探索候选暂不可用", "completed", "已核验结果仍会正常返回")); }
   aiRecommendations = aiRecommendations.map((item) => ({ ...item, country: normalizeRecommendationCountry(item.country) }));
-  const allowedAI = aiRecommendations.filter(item => profile.targetCountries.includes(item.country) && item.degreeLevel === profile.targetDegreeLevel && item.schoolName.trim() && item.programName.trim());
+  const matchingExpansion = (item: AIProgramRecommendation) => {
+    const name = item.programName.toLowerCase().replace(/[^a-z0-9\u00c0-\u024f\u4e00-\u9fff]+/g, " ").trim();
+    return expansions.find(expansion => {
+      const term = expansion.term.toLowerCase().replace(/[^a-z0-9\u00c0-\u024f\u4e00-\u9fff]+/g, " ").trim();
+      if (!term) return false;
+      if (name.includes(term) || term.includes(name)) return true;
+      const tokens = term.split(/\s+/).filter(token => token.length >= 3);
+      const matchedTokens = tokens.filter(token => name.split(/\s+/).includes(token));
+      return matchedTokens.length >= Math.min(2, tokens.length);
+    });
+  };
+  const allowedAI = aiRecommendations.filter(item => profile.targetCountries.includes(item.country) && item.degreeLevel === profile.targetDegreeLevel && item.schoolName.trim() && item.programName.trim() && matchingExpansion(item));
   const seenAI = new Set<string>();
   const aiVerificationLeads: ProgrammeLead[] = [];
   for (const item of allowedAI) {
@@ -65,7 +76,7 @@ export async function orchestrateRecommendations(input: { profile: StudentProfil
       searchTitle: `${item.schoolName} — ${item.programName}`,
       snippet: item.recommendationReasons.join("；") || null,
       entityType: "unknown",
-      fieldRelation: "highly_related",
+      fieldRelation: matchingExpansion(item)?.relation ?? "cross_discipline",
       discoveryQuery: item.verificationQueries.join(" | "),
       discoveredAt: new Date().toISOString(),
     };
