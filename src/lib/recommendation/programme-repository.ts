@@ -1,3 +1,4 @@
+
 import cache from "../../../data/programmes/official-discovery-cache.json";
 import type { DegreeLevel, FieldExpansion, ProgrammeLead, UnderstoodProfile, VerifiedField, VerifiedProgramme } from "./types";
 type CachedRecord = (typeof cache)[number];
@@ -26,4 +27,3 @@ export function retrieveCachedVerifiedProgrammes(profile: UnderstoodProfile, exp
     return [{ institutionName: record.institution, programmeName: record.programme, country, officialProgrammeUrl: url, officialRootDomain: new URL(url).hostname.replace(/^www\./, ""), degreeType: record.programme.match(/\b(?:MSc|MA|LLM|MBA|Master|Bachelor|PhD)\b/i)?.[0] ?? level, degreeLevel: level, campus: storedField<string>(null, url, date), fieldRelation: terms.get(matched.toLowerCase()) ?? "highly_related", sourceType: "official" as const, active: storedField(true, url, date), intake: storedField<string>(null, url, date), teachingLanguage: storedField<string>(null, url, date), degreeRequirement: storedField<string>(null, url, date), subjectRequirement: storedField<string>(null, url, date), gradeRequirement: storedField<string>(null, url, date), languageRequirement: storedField<string>(null, url, date), tuition: storedField<number>(null, url, date), tuitionCurrency: storedField<string>(null, url, date), deadline: storedField<string>(null, url, date), applicationUrl: storedField<string>(null, url, date), discoveryQuery: record.discoveryQuery, discoveredAt: date }];
   });
 }
-

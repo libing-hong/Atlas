@@ -29,6 +29,21 @@ body {
   font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
+.atlas-input {
+  width: 100%;
+  border: 1px solid #d8ccbe;
+  border-radius: 0.9rem;
+  background: white;
+  padding: 0.7rem 0.85rem;
+  color: #2f2924;
+  outline: none;
+}
+
+.atlas-input:focus {
+  border-color: #7c9a78;
+  box-shadow: 0 0 0 3px rgb(124 154 120 / 15%);
+}
+
 button,
 input,
 select,
@@ -78,4 +93,3 @@ textarea {
 span.rounded-full {
   white-space: nowrap;
 }
-

@@ -1,3 +1,4 @@
+
 import type { FieldExpansion, FieldRelation } from "./types";
 
 const relations: Array<{ anchors: RegExp; terms: Array<[string,string,FieldRelation]> }> = [{
@@ -31,4 +32,3 @@ export function relationAllowed(relation: FieldRelation, preference: "related_on
   if (preference === "adjacent") return relation !== "cross_discipline";
   return relation === "synonym" || relation === "highly_related";
 }
-
