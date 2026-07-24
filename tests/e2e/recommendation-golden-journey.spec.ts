@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const allowedCountries = ["娉曞浗", "鑻卞浗"];
+const allowedCountries = ["法国", "英国"];
 const candidate = (institutionName: string, programmeName: string, country: string, url: string) => ({
   institution: institutionName, programme: programmeName, institutionName, programmeName, country, degreeLevel: "master",
   officialUrl: url, officialProgrammeUrl: url, fieldRelation: "synonym", academicStatus: "meets", languageStatus: "pending",
@@ -8,15 +8,15 @@ const candidate = (institutionName: string, programmeName: string, country: stri
   sources: [], matchExplanation: "Verified official programme", recommendationBand: "target", score: 90, verifiedProgramme: {},
 });
 const mockedCandidates = [
-  candidate("KEDGE Business School", "MSc International Business", "娉曞浗", "https://student.kedge.edu/programmes/international-business"),
-  candidate("University of Warwick", "International Business MSc", "鑻卞浗", "https://warwick.ac.uk/study/postgraduate/courses/msc-international-business/"),
+  candidate("KEDGE Business School", "MSc International Business", "法国", "https://student.kedge.edu/programmes/international-business"),
+  candidate("University of Warwick", "International Business MSc", "英国", "https://warwick.ac.uk/study/postgraduate/courses/msc-international-business/"),
 ];
 
 async function mockRecommendationApi(page: Page) {
   await page.route("**/api/recommendations", async (route) => {
     const request = route.request().postDataJSON();
     expect(request.profile.targetCountryCodes).toEqual(["GB", "FR"]);
-    expect(request.profile.targetDegreeLevel).toBe("纭曞＋");
+    expect(request.profile.targetDegreeLevel).toBe("硕士");
     expect(request.profile.targetSubjects).toEqual(["International Business"]);
     await route.fulfill({
       status: 200,
@@ -48,8 +48,8 @@ test("mock API candidates render as valid France and UK school cards", async ({ 
   const profile = {
     name: "Golden Journey",
     educationHistory: [{ id: "education", country: "France", institutionNameZh: null, institutionNameEn: "Test University", degreeLevel: "bachelor", degreeName: null, major: "Business", graduationYear: 2026, graduationMonth: 6, graduationStatus: "graduated", arithmeticAverage: 80, weightedAverage: null, officialAverage: null, gpa: null, gradingSystem: "100", prerequisiteCourses: [] }],
-    languageTests: [], workExperiences: [], internships: [], targetCountries: ["鑻卞浗", "娉曞浗"], targetCountryCodes: ["GB", "FR"],
-    targetSubjects: ["International Business"], targetDegreeLevel: "纭曞＋", targetIntake: { year: 2027, term: "fall" },
+    languageTests: [], workExperiences: [], internships: [], targetCountries: ["英国", "法国"], targetCountryCodes: ["GB", "FR"],
+    targetSubjects: ["International Business"], targetDegreeLevel: "硕士", targetIntake: { year: 2027, term: "fall" },
     maxAnnualTuition: null, tuitionCurrency: null, preferredCities: [], crossDisciplinePreference: "related_only",
     acceptsPreMaster: false, acceptsLanguageCourse: true,
   };
@@ -66,15 +66,14 @@ test("mock API candidates render as valid France and UK school cards", async ({ 
 test("planner entry flow creates a profile and reaches rendered recommendations", async ({ page }) => {
   await mockRecommendationApi(page);
   await page.goto("/planner");
-  await page.getByLabel("濮撳悕").fill("Golden Journey");
-  await page.getByLabel("瀛︽牎鑻辨枃鍚?).fill("Test University");
-  await page.getByLabel("涓撲笟", { exact: true }).fill("Business");
-  await page.getByRole("checkbox", { name: "鑻卞浗", exact: true }).check();
-  await page.getByRole("checkbox", { name: "娉曞浗", exact: true }).check();
-  await page.getByLabel("鐩爣涓撲笟锛堢敤銆佸垎闅旓級").fill("International Business");
-  await page.getByLabel("鐩爣瀛﹀巻灞傜骇").selectOption("纭曞＋");
-  await page.getByRole("button", { name: "淇濆瓨缁熶竴璧勬枡骞堕噸鏂拌绠楁帹鑽? }).click();
+  await page.getByLabel("姓名").fill("Golden Journey");
+  await page.getByLabel("学校英文名").fill("Test University");
+  await page.getByLabel("专业", { exact: true }).fill("Business");
+  await page.getByRole("checkbox", { name: "英国", exact: true }).check();
+  await page.getByRole("checkbox", { name: "法国", exact: true }).check();
+  await page.getByLabel("目标专业（用、分隔）").fill("International Business");
+  await page.getByLabel("目标学历层级").selectOption("硕士");
+  await page.getByRole("button", { name: "保存统一资料并重新计算推荐" }).click();
   await expect(page).toHaveURL(/\/result\?runId=/);
   await assertRenderedCards(page);
 });
-
