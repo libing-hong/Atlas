@@ -80,6 +80,7 @@ export type ApplicationRecord = {
   serviceType: "none" | "single_school" | "full_service";
   submissionMode: ApplicationSubmissionMode;
   applicationPortalUrl?: string;
+  officialProgramUrl?: string;
   applicationProvider?: string;
   applicationLinkStatus?: SchoolRecommendation["applicationLinkStatus"];
   applicationPortalOpenedAt?: string;
@@ -194,12 +195,13 @@ export function createApplicationRecord(school: SchoolRecommendation, planningRu
     preparedMaterials: school.materialsReady,
     totalMaterials: school.materialsTotal,
     missingMaterials,
-    applicationProgress: Math.round((school.materialsReady / school.materialsTotal) * 45),
+    applicationProgress: Math.round(15 + (school.materialsReady / Math.max(school.materialsTotal, 1)) * 45),
     nextAction: `开始准备 ${school.universityName} 的申请材料`,
     nextDeadline: school.deadline,
     serviceType: "none",
     submissionMode: "unselected",
     applicationPortalUrl: school.applicationUrl,
+    officialProgramUrl: school.officialProgramUrl,
     applicationProvider: school.applicationProvider,
     applicationLinkStatus: school.applicationLinkStatus,
     updatedAt: new Date().toISOString(),
