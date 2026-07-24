@@ -30,7 +30,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
     id: applicationId, planningRunId: readActivePlanningRun()?.id ?? "legacy", schoolRecommendationId: school.id, universityName: school.universityName, programName: school.programName,
     country: school.country, intake: school.intake, status: "preparing_materials", detectedMaterialCount: school.materialsReady, preparedMaterials: school.materialsReady,
     totalMaterials: school.materialsTotal, missingMaterials: [], applicationProgress: Math.round((school.materialsReady / school.materialsTotal) * 45), nextAction: "准备申请材料", serviceType: "none",
-    submissionMode: "unselected", applicationPortalUrl: school.applicationUrl, applicationProvider: school.applicationProvider, applicationLinkStatus: school.applicationLinkStatus, updatedAt: new Date().toISOString(),
+    submissionMode: "unselected", applicationPortalUrl: school.applicationUrl, officialProgramUrl: school.officialProgramUrl, applicationProvider: school.applicationProvider, applicationLinkStatus: school.applicationLinkStatus, updatedAt: new Date().toISOString(),
   }, [applicationId, school]);
   const requirements = useMemo(() => getAdmissionRequirements(school), [school]);
   const knowledge = getAdmissionKnowledge(school.id);
@@ -89,7 +89,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
       detectedMaterialCount,
       preparedMaterials: detectedMaterialCount,
       missingMaterials,
-      applicationProgress: readyToApply ? 60 : Math.max(15, Math.round(15 + (detectedMaterialCount / Math.max(baseMaterials.length, 1)) * 35)),
+      applicationProgress: readyToApply ? 70 : Math.max(15, Math.round(15 + (detectedMaterialCount / Math.max(baseMaterials.length, 1)) * 45)),
       status: readyToApply ? "ready_to_submit" : "preparing_materials",
       nextAction: readyToApply ? "核对申请信息并提交申请" : `补充 ${missingMaterials[0] ?? "申请材料"}`,
     });
@@ -128,7 +128,7 @@ export function MaterialsWorkspaceClient({ school, applicationId }: { school: Sc
       detectedMaterialCount,
       preparedMaterials: detectedMaterialCount,
       missingMaterials: unreadyMaterials.map((material) => material.name),
-      applicationProgress: applicationReady ? 60 : Math.max(15, Math.round(15 + (detectedMaterialCount / Math.max(baseMaterials.length, 1)) * 35)),
+      applicationProgress: applicationReady ? 70 : Math.max(15, Math.round(15 + (detectedMaterialCount / Math.max(baseMaterials.length, 1)) * 45)),
       status: applicationReady ? "ready_to_submit" : "preparing_materials",
       nextAction: applicationReady ? "选择申请方式并前往官方申请系统" : pending.length ? `确认 ${pending[0].label}` : `补充 ${unreadyMaterials[0]?.name ?? "申请材料"}`,
     });
