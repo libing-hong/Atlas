@@ -88,7 +88,7 @@ test("a low budget does not remove programmes at retrieval", () => {
 });
 
 test("AI programmes missing from Atlas remain hidden pending official verification", () => {
-  const item: AIProgramRecommendation = { schoolName:"Example University",schoolNameLocal:null,programName:"MA Arts Management",programNameLocal:null,country:"英国",city:"London",degreeLevel:"master",subjectArea:"Arts Management",category:"target",estimatedFitScore:78,recommendationReasons:["专业方向匹配"],applicantStrengths:["相关本科背景"],admissionConcerns:[],missingRequirements:["语言成绩"],verificationQueries:["site:example.ac.uk MA Arts Management"],expectedOfficialDomain:"example.ac.uk",possibleOfficialUrl:null,confidence:.7 };
+  const item: AIProgramRecommendation = { schoolName:"Example University",schoolNameLocal:null,programName:"MA Arts Management",programNameLocal:null,country:"英国",city:"London",degreeLevel:"master",subjectArea:"Arts Management",category:"target",estimatedFitScore:78,recommendationReasons:["专业方向匹配"],applicantStrengths:["相关本科背景"],admissionConcerns:[],admissionRequirements:[],missingRequirements:["语言成绩"],verificationQueries:["site:example.ac.uk MA Arts Management"],expectedOfficialDomain:"example.ac.uk",possibleOfficialUrl:null,confidence:.7 };
   const result = aiRecommendationToCandidate(item);
   assert.equal(result.generatedByAI, true);
   assert.equal(result.verificationStatus, "pending");
