@@ -1,0 +1,10 @@
+drop trigger if exists student_profile_invalidate_recommendations on public.student_profiles;
+drop function if exists public.mark_profile_recommendations_stale();
+drop table if exists public.visa_materials;
+drop table if exists public.visa_tasks;
+drop table if exists public.visa_rule_versions;
+drop table if exists public.visa_cases;
+drop index if exists public.application_records_one_final_offer_per_owner;
+alter table public.application_records drop column if exists offer_verified_at, drop column if exists is_final_offer;
+alter table public.recommendation_runs drop column if exists requires_manual_review, drop column if exists request_started_at, drop column if exists failed_stage, drop column if exists error_code, drop column if exists rule_version;
+alter table public.student_profiles drop column if exists recommendations_stale, drop column if exists profile_version, drop column if exists profile_data;
