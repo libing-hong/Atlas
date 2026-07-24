@@ -24,6 +24,16 @@ const types = (value: unknown) => Array.isArray(value) ? value.map(String) : val
 const genericPageCopy = /\b(skip to|main content|make a difference|welcome|home page|page not found|accessibility|cookie|privacy|menu|search|discover more|learn more)\b/i;
 export const plausibleInstitutionName = (value: string | null) => Boolean(value && value.length >= 4 && value.length <= 120 && !genericPageCopy.test(value) && /university|universit[eé]|school|college|école|institute|institut/i.test(value));
 export const plausibleProgrammeName = (value: string | null) => Boolean(value && value.length >= 4 && value.length <= 180 && !genericPageCopy.test(value) && /\b(master|msc|m\.sc|ma\b|m\.a\.|llm|mba|bachelor|bsc|ba\b|phd|doctor|degree|programme|program)\b/i.test(value));
+const evidenceTokens = (value: string) => value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((token) => token.length >= 4 && !["university", "school", "college", "master", "programme", "program", "degree"].includes(token));
+const supportedByPage = (value: string, body: string, url: URL) => {
+  const haystack = `${url.hostname} ${url.pathname} ${body.slice(0, 80_000)}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const tokens = evidenceTokens(value);
+  return tokens.length > 0 && tokens.some((token) => haystack.includes(token));
+};
+const claimedNames = (title: string) => {
+  const parts = title.split(/\s+[—–]\s+/).map((part) => part.trim());
+  return parts.length >= 2 ? { institution: parts[0], programme: parts.slice(1).join(" — ") } : { institution: null, programme: null };
+};
 
 function structuredData(html: string): Record<string, unknown>[] {
   const records: Record<string, unknown>[] = []; const pattern = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi; let match: RegExpExecArray | null;
@@ -70,12 +80,17 @@ export async function verifyProgrammeLead(lead: ProgrammeLead, profile: Understo
   if (reasons.length) return { rejection: { lead, reasons: [...new Set(reasons)] } };
 
   const retrievedAt = new Date().toISOString();
-  const response = await safeFetchText(lead.url, { timeoutMs: 5_000, maxBytes: 1_500_000, allowedContentTypes: ["text/html", "application/xhtml+xml"], init: { headers: { "User-Agent": "AtlasOfficialVerifier/2.0" } } }).catch(() => null);
+  const response = await safeFetchText(lead.url, { timeoutMs: 8_000, maxBytes: 1_500_000, allowedContentTypes: ["text/html", "application/xhtml+xml"], init: { headers: { "User-Agent": "Mozilla/5.0 (compatible; AtlasOfficialVerifier/2.1; +https://atlas-eight-henna.vercel.app)" } } }).catch(() => null);
   if (!response?.ok) return { rejection: { lead, reasons: ["PROGRAMME_NOT_VERIFIED"] } };
   const finalUrl = response.url || lead.url; const finalParsed = new URL(finalUrl); const html = response.text; const body = plainText(html); const records = structuredData(html);
+  const claimed = claimedNames(lead.searchTitle);
   const extractedInstitutionName = extractInstitution(records, body); const extractedProgrammeName = extractProgramme(records, html, body);
-  const institutionName = plausibleInstitutionName(extractedInstitutionName) ? extractedInstitutionName : null;
-  const programmeName = plausibleProgrammeName(extractedProgrammeName) ? extractedProgrammeName : null;
+  const institutionName = plausibleInstitutionName(extractedInstitutionName)
+    ? extractedInstitutionName
+    : plausibleInstitutionName(claimed.institution) && supportedByPage(claimed.institution!, body, finalParsed) ? claimed.institution : null;
+  const programmeName = plausibleProgrammeName(extractedProgrammeName)
+    ? extractedProgrammeName
+    : plausibleProgrammeName(claimed.programme) && supportedByPage(claimed.programme!, body, finalParsed) ? claimed.programme : null;
   const officialRootDomain = rootDomain(finalParsed.hostname);
   const country = finalParsed.hostname.endsWith(".ac.uk") ? "英国" : finalParsed.hostname.endsWith(".edu.au") ? "澳洲" : finalParsed.hostname.endsWith(".fr") ? "法国" : extractStructuredCountry(records) ?? canonicalCountry(`${finalParsed.hostname} ${body.slice(0, 12000)}`);
   const institutionVerified = Boolean(institutionName && officialRootDomain && !blockedDomain.test(finalParsed.hostname));
@@ -85,7 +100,8 @@ export async function verifyProgrammeLead(lead: ProgrammeLead, profile: Understo
   if (!programmeName) reasons.push("MISSING_PROGRAMME_NAME");
   const degreeLevel = detectDegreeLevel(programmeName ?? "") ?? detectDegreeLevel(body.slice(0, 4000)); const degreeType = first(`${programmeName ?? ""} ${body}`, [/(LLM|Master of Laws|MSc|M\.Sc\.?|Master of Science|MA|Master of Arts|MBA|Bachelor[^,.;]{0,40}|PhD)/i]);
   const hasAdmissionsInformation = /admission|entry requirements?|eligibility|how to apply|application|apply now|candidature|admissions?/i.test(body);
-  const programmeVerified = Boolean(programmeName && degreeLevel && degreeType && hasAdmissionsInformation && /master|msc|ma\b|llm|bachelor|phd|degree|programme|program/i.test(`${programmeName} ${body.slice(0, 3000)}`));
+  const programmePathEvidence = /\/(?:program(?:me)?s?|courses?|study|degrees?|masters?|graduate)\b/i.test(finalParsed.pathname);
+  const programmeVerified = Boolean(programmeName && degreeLevel && degreeType && supportedByPage(programmeName, body, finalParsed) && (hasAdmissionsInformation || programmePathEvidence));
   const programmeVerification: ProgrammeVerification = { programmeVerified, programmeName, degreeType, degreeLevel, campus: null, hasAdmissionsInformation, officialProgrammeUrl: programmeVerified ? finalUrl : null };
   if (!programmeVerified) reasons.push("PROGRAMME_NOT_VERIFIED");
   if (country && !profile.targetCountries.map(normalizeTargetCountry).includes(country)) reasons.push("COUNTRY_NOT_SELECTED");
