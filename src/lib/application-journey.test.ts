@@ -3,6 +3,7 @@ import test from "node:test";
 import type { ApplicationRecord } from "./application-prototype-data";
 import {
   attachOfferEvidence,
+  applicationProgressFor,
   chooseSubmissionMode,
   confirmApplicationSubmitted,
   getVerifiedApplicationPortal,
@@ -55,6 +56,18 @@ test("opening a verified portal is not submission", () => {
   const next = markPortalOpened(application("a"), "2026-07-24T12:00:00.000Z");
   assert.equal(next.status, "submission_in_progress");
   assert.equal(next.submittedAt, undefined);
+});
+
+test("application progress follows the journey completion scale", () => {
+  assert.equal(applicationProgressFor("preparing_materials", 0, 8), 15);
+  assert.equal(applicationProgressFor("preparing_materials", 8, 8), 60);
+  assert.equal(applicationProgressFor("ready_to_submit"), 70);
+  assert.equal(applicationProgressFor("submission_in_progress"), 75);
+  assert.equal(applicationProgressFor("submitted"), 85);
+  assert.equal(applicationProgressFor("waiting_result"), 90);
+  assert.equal(applicationProgressFor("conditional_offer"), 95);
+  assert.equal(applicationProgressFor("unconditional_offer"), 98);
+  assert.equal(applicationProgressFor("accepted"), 100);
 });
 
 test("confirming submission enters waiting result", () => {
