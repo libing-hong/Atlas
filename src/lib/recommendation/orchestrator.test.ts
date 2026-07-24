@@ -1,3 +1,6 @@
+Exit code: 0
+Wall time: 1.1 seconds
+Output:
 import test from "node:test";
 import assert from "node:assert/strict";
 import { classifyProgrammeLead } from "./programme-discovery";
@@ -46,6 +49,15 @@ test("France law retrieves real law programmes with distinct institution and pro
   const results = retrieveCachedVerifiedProgrammes(value, expandField(value.targetField));
   assert.ok(results.length >= 2);
   assert.ok(results.every(item => item.institutionName !== item.programmeName && item.officialProgrammeUrl.startsWith("https://")));
+});
+
+test("France and UK international business has verified launch coverage", () => {
+  const value = understood(["法国", "英国"], "International Business");
+  const results = retrieveCachedVerifiedProgrammes(value, expandField(value.targetField));
+  assert.ok(results.some(item => item.institutionName === "KEDGE Business School"));
+  assert.ok(results.some(item => item.institutionName === "University of Warwick"));
+  assert.ok(results.some(item => item.institutionName === "University of Leeds"));
+  assert.ok(results.every(item => value.targetCountries.includes(item.country)));
 });
 
 test("missing language scores do not remove cached programmes", () => {
@@ -129,3 +141,4 @@ test("supervisor keeps AI candidates out of formal results and deduplicates revi
   assert.equal(result.candidates.filter((item) => item.institutionName === "Example University").length, 0);
   assert.ok(result.reviewQueue.some((item) => item.reasons.includes("DUPLICATE_RESULT")));
 });
+
