@@ -8,7 +8,6 @@ import { DashboardShell } from "@/components/PageShell";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { T, useLanguage } from "@/components/language/LanguageProvider";
-import { DevelopmentJourneyRepository, DevelopmentUserContext } from "@/lib/visual-prototype-data";
 import { getApplicationJourneyNodes, getAtlasPrimaryTask, getJourneyStagesForApplicationRecords } from "@/lib/atlas-task-selector";
 import { getApplicationStateSnapshot, getServerApplicationStateSnapshot, subscribeToApplicationState } from "@/lib/application-store";
 import { ApplicationRecord } from "@/lib/application-prototype-data";
@@ -16,7 +15,6 @@ import { readActivePlanningRun } from "@/lib/planning-store";
 
 export default function DashboardPage() {
   const { text, t } = useLanguage();
-  const context = DevelopmentUserContext.getDashboardContext();
   const snapshot = useSyncExternalStore(subscribeToApplicationState, getApplicationStateSnapshot, getServerApplicationStateSnapshot);
   const applicationState = snapshot === "server" ? { records: [] as ApplicationRecord[], selection: [] as string[], workspacePurchased: false } : JSON.parse(snapshot) as { records: ApplicationRecord[]; selection: string[]; workspacePurchased: boolean };
   const run = readActivePlanningRun();
@@ -25,8 +23,16 @@ export default function DashboardPage() {
   const selectedSchoolIds = applicationState.selection;
   const stages = getJourneyStagesForApplicationRecords(applicationRecords);
   const nodes = getApplicationJourneyNodes(applicationRecords, selectedSchoolIds);
-  const preparedItems = DevelopmentJourneyRepository.getPreparedItems();
-  const activity = DevelopmentJourneyRepository.getRecentActivity();
+  const preparedItems = applicationRecords.map((record) => ({
+    title: record.universityName,
+    description: record.nextAction,
+  }));
+  const activity = applicationRecords
+    .filter((record) => record.status === "submitted" || record.decisionStatus === "offer_received")
+    .map((record) => ({
+      label: `${record.universityName}：${record.nextAction}`,
+      time: "已保存",
+    }));
   const currentStage = stages.find((stage) => stage.state === "current") ?? stages[0];
   const currentIssue = nodes.find((node) => node.status === "blocked");
   const primaryTask = getAtlasPrimaryTask({ applicationRecords, selectedSchoolIds, workspacePurchased: applicationState.workspacePurchased, journeyNodes: nodes });
@@ -43,7 +49,7 @@ export default function DashboardPage() {
               <T en="My Atlas" zh="我的 Atlas" />
             </p>
             <h1 className="mt-3 font-editorial text-5xl font-semibold leading-none text-[#2f2924] md:text-6xl">
-              <T en={`Good morning, ${context.studentName}`} zh={`${profile?.name || text(context.studentName)}，早上好`} />
+              <T en={`Hello, ${profile?.name || "student"}`} zh={`${profile?.name || "你好"}，欢迎回来`} />
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-7 text-[#6f6256]">
               <T
@@ -56,10 +62,10 @@ export default function DashboardPage() {
           <div className="grid gap-3 rounded-[22px] bg-[#f7f0e8] p-4 text-sm text-[#5d5148] sm:grid-cols-2 xl:w-[420px]">
             <Fact label={{ en: "Application", zh: "申请" }} value={applicationRecords[0] ? `${applicationRecords[0].universityName} · ${applicationRecords[0].programName}` : "学校申请规划"} />
             <Fact label={{ en: "Current stage", zh: "当前阶段" }} value={text(currentStage.name)} />
-            <Fact label={{ en: "Destination", zh: "目的地" }} value={applicationRecords[0]?.country ?? profile?.targetCountries.join(" / ") ?? text(context.destination)} />
-            <Fact label={{ en: "Intake", zh: "入学时间" }} value={profile ? `${profile.targetIntake.year} ${profile.targetIntake.term === "spring" ? "春季" : profile.targetIntake.term === "summer" ? "夏季" : "秋季"}` : text(context.intakeDate)} />
+            <Fact label={{ en: "Destination", zh: "目的地" }} value={applicationRecords[0]?.country ?? profile?.targetCountries.join(" / ") ?? "尚未设置"} />
+            <Fact label={{ en: "Intake", zh: "入学时间" }} value={profile ? `${profile.targetIntake.year ?? "待定"} ${profile.targetIntake.term === "spring" ? "春季" : profile.targetIntake.term === "summer" ? "夏季" : profile.targetIntake.term === "fall" ? "秋季" : ""}` : "尚未设置"} />
             <Fact label={{ en: "School", zh: "学校" }} value={profile?.educationHistory[0]?.institutionNameZh || profile?.educationHistory[0]?.institutionNameEn || "未提供/待确认"} />
-            <Fact label={{ en: "Programme", zh: "项目" }} value={profile?.targetSubjects.join("、") || text(context.programme)} />
+            <Fact label={{ en: "Programme", zh: "项目" }} value={profile?.targetSubjects.join("、") || "尚未设置"} />
           </div>
         </div>
       </section>
@@ -173,12 +179,12 @@ export default function DashboardPage() {
         <Card>
           <CardHeader title={<T en="What Atlas prepared for you" zh="Atlas 已经为你准备的内容" />} />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {preparedItems.slice(0, 6).map((item) => (
-              <div key={item.title} className="rounded-2xl bg-[#f7f0e8] p-4">
+            {preparedItems.length ? preparedItems.slice(0, 6).map((item) => (
+              <div key={text(item.title)} className="rounded-2xl bg-[#f7f0e8] p-4">
                 <p className="text-sm font-semibold text-[#2f2924]">{text(item.title)}</p>
                 <p className="mt-2 text-sm leading-6 text-[#6f6256]">{text(item.description)}</p>
               </div>
-            ))}
+            )) : <p className="text-sm leading-6 text-[#6f6256]">完成背景填写并选择学校后，Atlas 会在这里展示真实的申请准备内容。</p>}
           </div>
         </Card>
       </section>
@@ -188,12 +194,12 @@ export default function DashboardPage() {
           <T en="What Atlas recently completed for you" zh="Atlas 最近为你完成了什么" />
         </h2>
         <div className="mt-3 divide-y divide-[#e8dfd3] text-sm">
-          {activity.map((item) => (
-            <div key={item.label} className="flex justify-between gap-4 py-3">
+          {activity.length ? activity.map((item) => (
+            <div key={text(item.label)} className="flex justify-between gap-4 py-3">
               <span className="text-[#4a3d34]">{text(item.label)}</span>
               <span className="shrink-0 text-[#8f847a]">{text(item.time)}</span>
             </div>
-          ))}
+          )) : <p className="py-4 text-[#8f847a]">还没有真实活动记录。完成一次推荐、选校或申请状态更新后会显示在这里。</p>}
         </div>
       </section>
     </DashboardShell>
