@@ -1,3 +1,6 @@
+Exit code: 0
+Wall time: 1.1 seconds
+Output:
 [
   {
     "institution": "KEDGE Business School",
@@ -51,6 +54,39 @@
     "fieldTerms": ["Law", "Master of Laws", "International Law", "European Law", "Droit", "Droit international"],
     "discoveryQuery": "official web discovery: site:assas-universite.fr Master Droit international admission",
     "discoveredAt": "2026-07-17T10:00:00.000Z",
+    "sourceType": "external_official_discovery",
+    "verificationStatus": "verified"
+  },
+  {
+    "institution": "KEDGE Business School",
+    "programme": "MSc International Business",
+    "officialUrl": "https://student.kedge.edu/programmes/international-business",
+    "countries": ["法国", "France"],
+    "fieldTerms": ["International Business", "International Management", "Global Business", "Commerce international", "国际商务", "国际商业"],
+    "discoveryQuery": "official verification: KEDGE MSc International Business",
+    "discoveredAt": "2026-07-24T11:20:00.000Z",
+    "sourceType": "external_official_discovery",
+    "verificationStatus": "verified"
+  },
+  {
+    "institution": "University of Warwick",
+    "programme": "MSc International Business",
+    "officialUrl": "https://warwick.ac.uk/study/postgraduate/courses/msc-international-business/",
+    "countries": ["英国", "United Kingdom"],
+    "fieldTerms": ["International Business", "International Management", "Global Business", "国际商务", "国际商业"],
+    "discoveryQuery": "official verification: Warwick MSc International Business",
+    "discoveredAt": "2026-07-24T11:20:00.000Z",
+    "sourceType": "external_official_discovery",
+    "verificationStatus": "verified"
+  },
+  {
+    "institution": "University of Leeds",
+    "programme": "International Business MSc",
+    "officialUrl": "https://courses.leeds.ac.uk/e763/international-business-msc",
+    "countries": ["英国", "United Kingdom"],
+    "fieldTerms": ["International Business", "International Management", "Global Business", "国际商务", "国际商业"],
+    "discoveryQuery": "official verification: Leeds International Business MSc",
+    "discoveredAt": "2026-07-24T11:20:00.000Z",
     "sourceType": "external_official_discovery",
     "verificationStatus": "verified"
   }
