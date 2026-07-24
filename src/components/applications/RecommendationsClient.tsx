@@ -102,10 +102,12 @@ export function RecommendationsClient({ runId: requestedRunId }: { runId?: strin
     if (!runId || !profile.targetCountries.length || !profile.targetSubjects.length || !profile.targetDegreeLevel) return;
     const cachedCandidates = readRecommendationCandidates(runId, profile);
     if (cachedCandidates?.length) {
-      console.info("[school-recommendation-cache]", { cachedCandidateCount: cachedCandidates.length, renderedCardCount: cachedCandidates.length });
-      setCategory("all"); setApiCandidateCount(cachedCandidates.length); setProgrammeCandidates(cachedCandidates); setEmptyReason(""); setDiscoveryState("complete");
-      setOrchestratorEvents([{ stage: "complete", label: "已载入本次规划的推荐项目", status: "completed", detail: `${cachedCandidates.length} 个项目` }]);
-      return;
+      const cachedTimer = window.setTimeout(() => {
+        console.info("[school-recommendation-cache]", { cachedCandidateCount: cachedCandidates.length, renderedCardCount: cachedCandidates.length });
+        setCategory("all"); setApiCandidateCount(cachedCandidates.length); setProgrammeCandidates(cachedCandidates); setEmptyReason(""); setDiscoveryState("complete");
+        setOrchestratorEvents([{ stage: "complete", label: "已载入本次规划的推荐项目", status: "completed", detail: `${cachedCandidates.length} 个项目` }]);
+      }, 0);
+      return () => window.clearTimeout(cachedTimer);
     }
     let active=true; const controller=new AbortController(); const requestTimeout=window.setTimeout(()=>controller.abort(),125000); const timer=window.setTimeout(()=>{setDiscoveryState("searching"); setCategory("all"); setApiCandidateCount(0); setProgrammeCandidates([]); setOrchestratorEvents([{stage:"programme_discovery",label:"正在检索相关项目",status:"running"}]);
       fetch("/api/recommendations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({profile,plannedApplicationCount:6}),signal:controller.signal})
