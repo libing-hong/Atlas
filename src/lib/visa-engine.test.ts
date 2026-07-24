@@ -6,7 +6,7 @@ import { archivePreviousVisaWorkspaces, emptyVisaFacts, generateVisaWorkspace, u
 const application = (country: string, changes: Partial<ApplicationRecord> = {}): ApplicationRecord => ({
   id: `application-${country}`, planningRunId: "run-1", schoolRecommendationId: "school-1",
   universityName: "Example University", programName: "Master Programme", country, intake: "2026 fall",
-  status: "offer_received", detectedMaterialCount: 0, preparedMaterials: 0, totalMaterials: 1,
+  status: "unconditional_offer", detectedMaterialCount: 0, preparedMaterials: 0, totalMaterials: 1,
   missingMaterials: [], applicationProgress: 100, nextAction: "Visa", serviceType: "none",
   decisionStatus: "offer_received", offerEvidenceAvailable: true, offerConditionsSatisfied: true, isFinalOffer: true,
   ...changes,
@@ -108,3 +108,4 @@ test("complex refusal, dependant or minor cases require human review", () => {
 });
 
 void (null as unknown as VisaWorkspace);
+
