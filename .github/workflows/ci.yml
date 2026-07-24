@@ -21,17 +21,27 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: "1"
       BASE_URL: http://127.0.0.1:3000
-      PR_SCOPE: ${{ contains(github.event.pull_request.labels.*.name, 'ui-only') && 'ui-only' || contains(github.event.pull_request.labels.*.name, 'visa-only') && 'visa-only' || contains(github.event.pull_request.labels.*.name, 'materials-only') && 'materials-only' || contains(github.event.pull_request.labels.*.name, 'content-only') && 'content-only' || contains(github.event.pull_request.labels.*.name, 'application-only') && 'application-only' || '' }}
+      PR_SCOPE_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Enforce protected scope
         if: github.event_name == 'pull_request'
         run: npm run validate:scope
+
       - name: Run complete CI suite
         run: npm run test:ci
 
@@ -39,13 +49,18 @@ jobs:
     name: CI / Playwright Golden Journey
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      ATLAS_E2E_MOCK_RECOMMENDATIONS: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm install --no-save --no-package-lock @playwright/test@1.55.0
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+
