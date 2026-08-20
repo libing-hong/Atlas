@@ -84,7 +84,7 @@ export type ApplicationRecord = {
   nextAction: string;
   nextDeadline?: string;
   serviceType: "none" | "single_school" | "full_service";
-  submissionMode: ApplicationSubmissionMode;
+  submissionMode?: ApplicationSubmissionMode;
   applicationPortalUrl?: string;
   officialProgramUrl?: string;
   applicationProvider?: string;
@@ -93,7 +93,7 @@ export type ApplicationRecord = {
   submittedAt?: string;
   applicationReference?: string;
   submissionEvidenceFileName?: string;
-  updatedAt: string;
+  updatedAt?: string;
   decisionStatus?: "waiting_result" | "offer_received" | "waitlisted" | "rejected";
   offerSource?: "student" | "atlas";
   offerEvidenceAvailable?: boolean;
