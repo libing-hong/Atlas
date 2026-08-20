@@ -60,7 +60,7 @@ export function ApplicationHomeClient({ runId: requestedRunId }: { runId?: strin
   const summary = getApplicationSummary(records, readinessById);
   const priorityNodes = getApplicationJourneyNodes(records, selectedIds);
   const priorityApplicationId = priorityNodes.find((node) => node.applicationId)?.applicationId;
-  const recentlyUpdatedId = [...records].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0]?.id;
+  const recentlyUpdatedId = [...records].sort((left, right) => (Date.parse(right.updatedAt ?? "") || 0) - (Date.parse(left.updatedAt ?? "") || 0))[0]?.id;
   const activeWorkspaceId = requestedWorkspaceId && records.some((record) => record.id === requestedWorkspaceId)
     ? requestedWorkspaceId
     : priorityApplicationId ?? recentlyUpdatedId;
