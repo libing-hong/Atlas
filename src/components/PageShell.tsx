@@ -5,20 +5,25 @@ import { Sidebar } from "./Sidebar";
 export function DashboardShell({
   children,
   mode = "student",
+  wide = false,
+  backgroundColor,
 }: {
   children: React.ReactNode;
   mode?: "student" | "admin";
+  wide?: boolean;
+  backgroundColor?: string;
 }) {
   const prototypeMode = !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  return (
+  const shell = (
     <>
-      <main className="atlas-shell flex gap-6 pb-28 pt-4 lg:py-6">
+      <main className={`atlas-shell ${wide ? "atlas-shell-wide" : ""} flex gap-6 pb-28 pt-4 lg:py-6`}>
         <Sidebar mode={mode} />
         <div className="min-w-0 flex-1">{prototypeMode ? <p className="mb-3 rounded-xl border border-[#e8d8bd] bg-[#fbf2df] px-4 py-2 text-xs text-[#7b6541]">Prototype Mode · 数据仅保存在当前浏览器，不代表正式账户数据</p> : null}{children}</div>
       </main>
       {mode === "student" ? <LegalFooter /> : null}
     </>
   );
+  return backgroundColor ? <div className="min-h-screen" style={{ backgroundColor }}>{shell}</div> : shell;
 }
 
 function LegalFooter() {
@@ -65,4 +70,3 @@ export function BackHome() {
     </Link>
   );
 }
-

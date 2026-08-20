@@ -20,6 +20,7 @@ export type ApplicationRecordStatus =
   | "selected"
   | "preparing_materials"
   | "ready_to_submit"
+  | "submission_in_progress"
   | "submitted"
   | "waiting_result"
   | "supplement_required"
@@ -29,6 +30,12 @@ export type ApplicationRecordStatus =
   | "accepted"
   | "declined"
   | "withdrawn";
+
+export type ApplicationSubmissionMode =
+  | "unselected"
+  | "diy"
+  | "atlas_single"
+  | "atlas_full_service";
 
 export type MaterialPreparationStatus = "prepared" | "uploading" | "processing" | "needs_confirmation" | "review_required" | "not_detected" | "not_required" | "rejected";
 
@@ -54,6 +61,12 @@ export type ApplicationMaterial = {
   note: string;
 };
 
+export type ProgrammeEvidenceSnapshot = {
+  capturedAt: string;
+  admissionRequirements: AdmissionRequirement[];
+  sources: Array<{ label: string; url: string }>;
+};
+
 export type ApplicationRecord = {
   id: string;
   planningRunId: string;
@@ -71,12 +84,23 @@ export type ApplicationRecord = {
   nextAction: string;
   nextDeadline?: string;
   serviceType: "none" | "single_school" | "full_service";
+  submissionMode: ApplicationSubmissionMode;
+  applicationPortalUrl?: string;
+  officialProgramUrl?: string;
+  applicationProvider?: string;
+  applicationLinkStatus?: SchoolRecommendation["applicationLinkStatus"];
+  applicationPortalOpenedAt?: string;
+  submittedAt?: string;
+  applicationReference?: string;
+  submissionEvidenceFileName?: string;
+  updatedAt: string;
   decisionStatus?: "waiting_result" | "offer_received" | "waitlisted" | "rejected";
   offerSource?: "student" | "atlas";
   offerEvidenceAvailable?: boolean;
   offerFileName?: string;
   offerConditionsSatisfied?: boolean;
   isFinalOffer?: boolean;
+  programmeEvidenceSnapshot?: ProgrammeEvidenceSnapshot;
 };
 
 export type SchoolRecommendation = {
@@ -165,6 +189,7 @@ export const commonMaterials = [
 
 export function createApplicationRecord(school: SchoolRecommendation, planningRunId = "legacy"): ApplicationRecord {
   const missingMaterials = school.requirements.filter((item) => !["本科成绩单", "英语语言成绩"].includes(item));
+  const now = new Date().toISOString();
   return {
     id: `app-${planningRunId}-${school.id}`,
     planningRunId,
@@ -178,10 +203,21 @@ export function createApplicationRecord(school: SchoolRecommendation, planningRu
     preparedMaterials: school.materialsReady,
     totalMaterials: school.materialsTotal,
     missingMaterials,
-    applicationProgress: Math.round((school.materialsReady / school.materialsTotal) * 45),
+    applicationProgress: Math.round(15 + (school.materialsReady / Math.max(school.materialsTotal, 1)) * 45),
     nextAction: `开始准备 ${school.universityName} 的申请材料`,
     nextDeadline: school.deadline,
     serviceType: "none",
+    submissionMode: "unselected",
+    applicationPortalUrl: school.applicationUrl,
+    officialProgramUrl: school.officialProgramUrl,
+    applicationProvider: school.applicationProvider,
+    applicationLinkStatus: school.applicationLinkStatus,
+    updatedAt: now,
+    programmeEvidenceSnapshot: {
+      capturedAt: now,
+      admissionRequirements: getAdmissionRequirements(school),
+      sources: school.recommendationContent.sources,
+    },
   };
 }
 
@@ -333,7 +369,6 @@ export const applicationStateCopy: Record<ApplicationHomeState, {
     cta: "查看并处理 Offer",
   },
 };
-
 
 
 
