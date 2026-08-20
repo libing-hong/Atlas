@@ -64,6 +64,16 @@ textarea {
   margin: 0 auto;
 }
 
+.atlas-shell-wide {
+  width: min(1540px, calc(100% - 32px));
+}
+
+.atlas-content-container {
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
+}
+
 .soft-card {
   border: 1px solid rgba(232, 223, 211, 0.9);
   background: rgba(255, 250, 243, 0.78);
